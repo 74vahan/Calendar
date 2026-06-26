@@ -163,15 +163,7 @@ app.post('/api/rooms/:id/lessons', auth, async (req, res) => {
          VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
         [roomId, title, topic || null, date, start_time, end_time || null, note || null, series]
       );
-      const lesson = r.rows[0];
-      // հրավերներ բոլոր բաժանորդներին
-      await pool.query(
-        `INSERT INTO lesson_invites(lesson_id, user_id)
-         SELECT $1, s.user_id FROM subscriptions s WHERE s.room_id = $2
-         ON CONFLICT (lesson_id, user_id) DO NOTHING`,
-        [lesson.id, roomId]
-      );
-      created.push(lesson);
+      created.push(r.rows[0]);
     }
     res.json({ count: created.length, lessons: created });
   } catch (err) {
@@ -274,14 +266,6 @@ app.post('/api/channels/:roomId/subscribe', auth, async (req, res) => {
       'INSERT INTO subscriptions(room_id, user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
       [roomId, req.user.id]
     );
-    // հրավերներ՝ սենյակի ապագա դասերի համար
-    await pool.query(
-      `INSERT INTO lesson_invites(lesson_id, user_id)
-       SELECT l.id, $1 FROM lessons l
-       WHERE l.room_id = $2 AND l.lesson_date >= CURRENT_DATE
-       ON CONFLICT (lesson_id, user_id) DO NOTHING`,
-      [req.user.id, roomId]
-    );
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -294,12 +278,6 @@ app.delete('/api/channels/:roomId/subscribe', auth, async (req, res) => {
   try {
     await pool.query('DELETE FROM subscriptions WHERE room_id = $1 AND user_id = $2',
       [roomId, req.user.id]);
-    // հեռացնում ենք այս սենյակի դասերի հրավերները տվյալ օգտատիրոջից
-    await pool.query(
-      `DELETE FROM lesson_invites i USING lessons l
-       WHERE i.lesson_id = l.id AND l.room_id = $1 AND i.user_id = $2`,
-      [roomId, req.user.id]
-    );
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -307,20 +285,15 @@ app.delete('/api/channels/:roomId/subscribe', auth, async (req, res) => {
   }
 });
 
-// ---- aggregated calendar ----
+// ---- aggregated calendar (սեփական սենյակներ + բաժանորդագրվածներ՝ ՈՒՂԻՂ) ----
 app.get('/api/lessons', auth, async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT l.*, r.name AS room_name, r.channel AS channel, true AS owned
+      `SELECT l.*, r.name AS room_name, r.channel AS channel, (r.owner_id = $1) AS owned
          FROM lessons l JOIN rooms r ON r.id = l.room_id
         WHERE r.owner_id = $1
-       UNION
-       SELECT l.*, r.name AS room_name, r.channel AS channel, false AS owned
-         FROM lessons l
-         JOIN rooms r ON r.id = l.room_id
-         JOIN lesson_invites i ON i.lesson_id = l.id
-        WHERE i.user_id = $1 AND i.state = 'accepted'
-        ORDER BY lesson_date, start_time`,
+           OR r.id IN (SELECT room_id FROM subscriptions WHERE user_id = $1)
+        ORDER BY l.lesson_date, l.start_time`,
       [req.user.id]
     );
     res.json(r.rows);
@@ -330,20 +303,11 @@ app.get('/api/lessons', auth, async (req, res) => {
   }
 });
 
-// ---- messages (հրավերներ) ----
-app.get('/api/messages', auth, async (req, res) => {
+// ---- todos (անձնական գործերի ցանկ օրացույցում) ----
+app.get('/api/todos', auth, async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT i.id AS invite_id, i.state,
-         l.id, l.title, l.topic, l.lesson_date, l.start_time, l.end_time, l.note, l.status,
-         r.name AS room_name, r.channel,
-         u.full_name AS owner_name, u.username AS owner_username
-       FROM lesson_invites i
-       JOIN lessons l ON l.id = i.lesson_id
-       JOIN rooms r ON r.id = l.room_id
-       JOIN users u ON u.id = r.owner_id
-       WHERE i.user_id = $1 AND i.state = 'pending'
-       ORDER BY l.lesson_date, l.start_time`,
+      'SELECT * FROM todos WHERE user_id = $1 ORDER BY todo_date, todo_time NULLS LAST',
       [req.user.id]
     );
     res.json(r.rows);
@@ -353,22 +317,31 @@ app.get('/api/messages', auth, async (req, res) => {
   }
 });
 
-async function setInviteState(req, res, state) {
-  const id = Number(req.params.id);
+app.post('/api/todos', auth, async (req, res) => {
+  const { todo_date, todo_time, title } = req.body || {};
+  if (!todo_date || !title) return res.status(400).json({ error: 'օր և անվանում պարտադիր են' });
   try {
     const r = await pool.query(
-      'UPDATE lesson_invites SET state = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
-      [state, id, req.user.id]
+      'INSERT INTO todos(user_id, todo_date, todo_time, title) VALUES($1,$2,$3,$4) RETURNING *',
+      [req.user.id, todo_date, todo_time || null, title.trim()]
     );
-    if (!r.rows[0]) return res.status(404).json({ error: 'հրավերը չգտնվեց' });
     res.json(r.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'սերվերի սխալ' });
   }
-}
-app.post('/api/messages/:id/accept', auth, (req, res) => setInviteState(req, res, 'accepted'));
-app.post('/api/messages/:id/decline', auth, (req, res) => setInviteState(req, res, 'declined'));
+});
+
+app.delete('/api/todos/:id', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM todos WHERE id = $1 AND user_id = $2',
+      [Number(req.params.id), req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'սերվերի սխալ' });
+  }
+});
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

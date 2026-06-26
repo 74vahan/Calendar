@@ -105,6 +105,16 @@ const I18N = {
     toast_accepted: 'Ընդունված է',
     toast_declined: 'Մերժված է',
     err_generic: 'Սխալ',
+
+    todo_section: 'Անելիքներ',
+    todo_title_ph: 'Ի՞նչ անել',
+    todo_add: 'Ավելացնել',
+    no_todos: 'Այս օրը անելիքներ չկան։',
+    confirm_delete_todo: 'Ջնջե՞լ այս անելիքը։',
+    toast_todo_added: 'Անելիքն ավելացվեց',
+    toast_todo_deleted: 'Ջնջված է',
+    socrates_quote: 'Փոփոխության գաղտնիքը ոչ թե հնի դեմ պայքարելն է, այլ նոր կառուցելը։',
+    socrates_name: '— Սոկրատես',
   },
 
   ru: {
@@ -206,6 +216,16 @@ const I18N = {
     toast_accepted: 'Принято',
     toast_declined: 'Отклонено',
     err_generic: 'Ошибка',
+
+    todo_section: 'Дела',
+    todo_title_ph: 'Что сделать',
+    todo_add: 'Добавить',
+    no_todos: 'На этот день дел нет.',
+    confirm_delete_todo: 'Удалить это дело?',
+    toast_todo_added: 'Дело добавлено',
+    toast_todo_deleted: 'Удалено',
+    socrates_quote: 'Секрет перемен в том, чтобы направить всю энергию не на борьбу со старым, а на создание нового.',
+    socrates_name: '— Сократ',
   },
 
   en: {
@@ -307,6 +327,16 @@ const I18N = {
     toast_accepted: 'Accepted',
     toast_declined: 'Declined',
     err_generic: 'Error',
+
+    todo_section: 'To-do',
+    todo_title_ph: 'What to do',
+    todo_add: 'Add',
+    no_todos: 'No to-dos on this day.',
+    confirm_delete_todo: 'Delete this to-do?',
+    toast_todo_added: 'To-do added',
+    toast_todo_deleted: 'Deleted',
+    socrates_quote: 'The secret of change is to focus all your energy not on fighting the old, but on building the new.',
+    socrates_name: '— Socrates',
   },
 };
 

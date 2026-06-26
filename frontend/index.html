@@ -12,6 +12,10 @@
 <body>
   <!-- ====== Մուտք / Գրանցում ====== -->
   <div id="auth" class="auth-wrap">
+    <div class="auth-quote" aria-hidden="true">
+      <div class="q-text" data-i18n="socrates_quote">«…»</div>
+      <div class="q-name" data-i18n="socrates_name">— Սոկրատես</div>
+    </div>
     <div class="auth-card">
       <div class="auth-top">
         <select id="lang-auth" class="lang-select" aria-label="language"></select>
@@ -44,10 +48,6 @@
         <button class="nav-tab active" data-view="calendar" data-i18n="nav_calendar">Կալենդար</button>
         <button class="nav-tab" data-view="rooms" data-i18n="nav_rooms">Իմ սենյակները</button>
         <button class="nav-tab" data-view="channels" data-i18n="nav_channels">Կանալներ</button>
-        <button class="nav-tab" data-view="messages">
-          <span data-i18n="nav_messages">Հաղորդագրություններ</span>
-          <span id="msg-badge" class="badge-count hidden">0</span>
-        </button>
       </nav>
       <div class="user-box">
         <select id="lang-app" class="lang-select" aria-label="language"></select>
@@ -172,13 +172,6 @@
       </section>
     </main>
 
-    <!-- ===== VIEW: Հաղորդագրություններ ===== -->
-    <main id="view-messages" class="view hidden">
-      <section class="card">
-        <h2 data-i18n="messages_title">Հրավերներ</h2>
-        <div id="messages-list"></div>
-      </section>
-    </main>
   </div>
 
   <!-- Օրվա դասերի մոդալ -->

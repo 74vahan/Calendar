@@ -1,10 +1,10 @@
 -- ============================================================
---  Կալենդար v2 — Rooms / Channels / Subscriptions / Messages
+--  Կալենդար v2.1 — Rooms / Channels / Subscriptions / Todos
 --  users    — օգտատերեր (բոլորը հավասար)
 --  rooms    — ժամանակացույց + ունիկալ կանալ
---  subscriptions — ո՞վ ո՞ր կանալին է բաժանորդագրված
+--  subscriptions — բաժանորդագրումներ (բաժանորդը ՈՒՂԻՂ տեսնում է կանալի դասերը)
 --  lessons  — դասեր (պատկանում են սենյակին/կանալին)
---  lesson_invites — «Հաղորդագրություններ»: հրավերներ բաժանորդներին
+--  todos    — օգտատիրոջ անձնական գործերի ցանկ (օրացույցում)
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   id         SERIAL PRIMARY KEY,
   owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
-  channel    TEXT UNIQUE NOT NULL,          -- ունիկալ կանալի անունը
+  channel    TEXT UNIQUE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -31,9 +31,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   UNIQUE(room_id, user_id)
 );
 
--- v1-ի lessons-ը (student_id-ով) անհամատեղելի է նոր մոդելի հետ → վերստեղծում ենք.
-DROP TABLE IF EXISTS lessons CASCADE;
-CREATE TABLE lessons (
+CREATE TABLE IF NOT EXISTS lessons (
   id          SERIAL PRIMARY KEY,
   room_id     INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   title       TEXT NOT NULL,
@@ -43,22 +41,24 @@ CREATE TABLE lessons (
   end_time    TIME,
   note        TEXT,
   status      TEXT NOT NULL DEFAULT 'scheduled',   -- scheduled | done | cancelled
-  series_id   TEXT,                                 -- կրկնվող դասերի խումբ
+  series_id   TEXT,
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS lesson_invites (
+-- Հրավերների (accept/decline) ֆունկցիան հանված է → բաժանորդն ուղիղ տեսնում է դասերը.
+DROP TABLE IF EXISTS lesson_invites CASCADE;
+
+CREATE TABLE IF NOT EXISTS todos (
   id         SERIAL PRIMARY KEY,
-  lesson_id  INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  state      TEXT NOT NULL DEFAULT 'pending',       -- pending | accepted | declined
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(lesson_id, user_id)
+  todo_date  DATE NOT NULL,
+  todo_time  TIME,
+  title      TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_lessons_room      ON lessons(room_id);
-CREATE INDEX IF NOT EXISTS idx_lessons_series    ON lessons(series_id);
-CREATE INDEX IF NOT EXISTS idx_subs_user         ON subscriptions(user_id);
-CREATE INDEX IF NOT EXISTS idx_subs_room         ON subscriptions(room_id);
-CREATE INDEX IF NOT EXISTS idx_invites_user      ON lesson_invites(user_id, state);
-CREATE INDEX IF NOT EXISTS idx_invites_lesson    ON lesson_invites(lesson_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_room   ON lessons(room_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_series ON lessons(series_id);
+CREATE INDEX IF NOT EXISTS idx_subs_user      ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subs_room      ON subscriptions(room_id);
+CREATE INDEX IF NOT EXISTS idx_todos_user     ON todos(user_id, todo_date);

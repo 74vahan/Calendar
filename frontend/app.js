@@ -4,7 +4,7 @@ let me = null;                 // { id, username }
 let lessons = [];              // ագրեգացված կալենդար (owned + accepted)
 let rooms = [];                // իմ սենյակները
 let channels = [];             // բոլոր կանալները
-let messages = [];             // pending հրավերներ
+let todos = [];                // անձնական անելիքներ
 let activeRoom = null;         // ընտրված սենյակը (կառավարման համար)
 let roomLessons = [];          // ընտրված սենյակի դասերը
 let viewYear, viewMonth;
@@ -42,7 +42,7 @@ function setLang(l) {
   if (me) {
     renderWho(); renderWeekdays(); renderCalendar(); renderUpcoming();
     renderRooms(); if (activeRoom) { $('active-room-name').textContent = activeRoom.name; renderRoomTable(); }
-    renderChannels(); renderMessages(); updateBadge();
+    renderChannels();
   }
 }
 function applyTheme() {
@@ -120,20 +120,18 @@ async function boot() {
   const now = new Date(); viewYear = now.getFullYear(); viewMonth = now.getMonth();
   renderWeekdays();
   await showView('calendar');
-  loadMessages(); // թարմացնում է badge-ը
 }
 
 // ====== View router ======
 document.querySelectorAll('.nav-tab').forEach((b) => { b.onclick = () => showView(b.dataset.view); });
 async function showView(v) {
   currentView = v;
-  for (const name of ['calendar', 'rooms', 'channels', 'messages'])
+  for (const name of ['calendar', 'rooms', 'channels'])
     $('view-' + name).classList.toggle('hidden', name !== v);
   document.querySelectorAll('.nav-tab').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
   if (v === 'calendar') await loadCalendar();
   if (v === 'rooms') await loadRooms();
   if (v === 'channels') await loadChannels();
-  if (v === 'messages') await loadMessages();
 }
 
 // ====== Ամսաթվի օգնականներ ======
@@ -147,7 +145,10 @@ function timeStr(l) { return l.end_time ? `${l.start_time}–${l.end_time}` : l.
 function dateShort(dateStr) { const [, m, d] = dateStr.split('-'); return `${Number(d)} ${months()[Number(m) - 1]}`; }
 
 // ====== Կալենդար ======
-async function loadCalendar() { lessons = await api('/api/lessons'); renderCalendar(); renderUpcoming(); }
+async function loadCalendar() {
+  [lessons, todos] = await Promise.all([api('/api/lessons'), api('/api/todos')]);
+  renderCalendar(); renderUpcoming();
+}
 
 function renderWeekdays() { $('weekdays').innerHTML = weekdays().map((d) => `<div>${d}</div>`).join(''); }
 
@@ -159,25 +160,37 @@ function renderCalendar() {
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const byDay = {};
   for (const l of lessons) (byDay[l.lesson_date] = byDay[l.lesson_date] || []).push(l);
+  const byTodo = {};
+  for (const tdo of todos) (byTodo[tdo.todo_date] = byTodo[tdo.todo_date] || []).push(tdo);
   const today = todayStr();
   for (let i = 0; i < lead; i++) { const c = document.createElement('div'); c.className = 'cell empty'; cal.appendChild(c); }
   for (let d = 1; d <= daysInMonth; d++) {
     const key = ymd(viewYear, viewMonth, d);
     const dayLessons = (byDay[key] || []).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const dayTodos = (byTodo[key] || []).sort((a, b) => (a.todo_time || '').localeCompare(b.todo_time || ''));
     const c = document.createElement('div');
     c.className = 'cell' + (key === today ? ' today' : '') + (key < today ? ' past' : '');
     c.innerHTML = `<div class="num">${d}</div>`;
-    for (const l of dayLessons.slice(0, 3)) {
+    const items = [
+      ...dayLessons.map((l) => ({ kind: 'lesson', obj: l })),
+      ...dayTodos.map((tdo) => ({ kind: 'todo', obj: tdo })),
+    ];
+    for (const it of items.slice(0, 3)) {
       const p = document.createElement('div');
-      p.className = 'pill s-' + (l.status || 'scheduled') + (l.owned ? '' : ' sub');
-      p.textContent = `${l.start_time} ${l.title}`;
+      if (it.kind === 'lesson') {
+        p.className = 'pill s-' + (it.obj.status || 'scheduled') + (it.obj.owned ? '' : ' sub');
+        p.textContent = `${it.obj.start_time} ${it.obj.title}`;
+      } else {
+        p.className = 'pill todo';
+        p.textContent = `${it.obj.todo_time ? it.obj.todo_time + ' ' : '✓ '}${it.obj.title}`;
+      }
       c.appendChild(p);
     }
-    if (dayLessons.length > 3) {
+    if (items.length > 3) {
       const more = document.createElement('div'); more.className = 'pill more';
-      more.textContent = `+${dayLessons.length - 3}`; c.appendChild(more);
+      more.textContent = `+${items.length - 3}`; c.appendChild(more);
     }
-    c.onclick = () => openDay(key, dayLessons);
+    c.onclick = () => openDay(key);
     cal.appendChild(c);
   }
 }
@@ -223,15 +236,69 @@ function renderUpcoming() {
 
 // ====== Օրվա մոդալ ======
 function statusBadge(s) { const st = s || 'scheduled'; return `<span class="badge s-${st}">${t('st_' + st)}</span>`; }
-function openDay(key, dayLessons) {
+let currentDayKey = null;
+function openDay(key) {
+  currentDayKey = key;
   const [y, m, d] = key.split('-');
   $('day-modal-title').textContent = `${Number(d)} ${months()[Number(m) - 1]} ${y}`;
-  const body = $('day-modal-body');
-  body.innerHTML = dayLessons.length
+  renderDayModalBody(key);
+  $('day-modal').classList.remove('hidden');
+}
+function renderDayModalBody(key) {
+  const dayLessons = lessons.filter((l) => l.lesson_date === key)
+    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  const dayTodos = todos.filter((tdo) => tdo.todo_date === key)
+    .sort((a, b) => (a.todo_time || '').localeCompare(b.todo_time || ''));
+  const lessonsHtml = dayLessons.length
     ? dayLessons.map(lessonCard).join('')
     : `<p class="empty-note">${t('no_lessons_day')}</p>`;
+  const todosHtml = `
+    <div class="todo-section">
+      <h4>${t('todo_section')}</h4>
+      ${dayTodos.length ? dayTodos.map(todoItem).join('') : `<p class="empty-note">${t('no_todos')}</p>`}
+      <div class="todo-add">
+        <input type="time" id="td-time" />
+        <input type="text" id="td-title" placeholder="${t('todo_title_ph')}" />
+        <button class="btn-primary" id="td-add">+ ${t('todo_add')}</button>
+      </div>
+    </div>`;
+  $('day-modal-body').innerHTML = lessonsHtml + todosHtml;
   wireDayActions();
-  $('day-modal').classList.remove('hidden');
+  wireTodoActions(key);
+}
+function todoItem(tdo) {
+  return `<div class="todo-item">
+    <span class="td-time">${tdo.todo_time ? esc(tdo.todo_time) : '—'}</span>
+    <span class="td-title">${esc(tdo.title)}</span>
+    <button class="btn-ghost td-del" data-id="${tdo.id}">✕</button>
+  </div>`;
+}
+function wireTodoActions(key) {
+  const add = $('td-add');
+  if (add) add.onclick = () => addTodo(key);
+  document.querySelectorAll('#day-modal-body .td-del').forEach((b) => b.onclick = () => delTodo(Number(b.dataset.id)));
+}
+async function addTodo(key) {
+  const title = $('td-title').value.trim();
+  const time = $('td-time').value || null;
+  if (!title) return;
+  try {
+    await api('/api/todos', { method: 'POST', body: JSON.stringify({ todo_date: key, todo_time: time, title }) });
+    toast(t('toast_todo_added'));
+    todos = await api('/api/todos');
+    renderCalendar();
+    renderDayModalBody(key);
+  } catch (err) { toast(err.message, 'err'); }
+}
+async function delTodo(id) {
+  if (!confirm(t('confirm_delete_todo'))) return;
+  try {
+    await api('/api/todos/' + id, { method: 'DELETE' });
+    toast(t('toast_todo_deleted'));
+    todos = await api('/api/todos');
+    renderCalendar();
+    if (currentDayKey) renderDayModalBody(currentDayKey);
+  } catch (err) { toast(err.message, 'err'); }
 }
 function lessonCard(l) {
   const st = l.status || 'scheduled';
@@ -441,43 +508,9 @@ async function subscribe(roomId, on) {
     await api('/api/channels/' + roomId + '/subscribe', { method: on ? 'POST' : 'DELETE' });
     toast(on ? t('toast_subscribed') : t('toast_unsubscribed'));
     await loadChannels();
-    await loadMessages();   // նոր հրավերներ → badge
-    if (currentView === 'calendar') await loadCalendar();
-    else lessons = await api('/api/lessons');
-  } catch (err) { toast(err.message, 'err'); }
-}
-
-// ====== Հաղորդագրություններ ======
-async function loadMessages() { messages = await api('/api/messages'); renderMessages(); updateBadge(); }
-function updateBadge() {
-  const b = $('msg-badge');
-  b.textContent = messages.length;
-  b.classList.toggle('hidden', messages.length === 0);
-}
-function renderMessages() {
-  const list = $('messages-list');
-  if (!messages.length) { list.innerHTML = `<p class="empty-note">${t('no_messages')}</p>`; return; }
-  list.innerHTML = messages.map((m) => `
-    <div class="msg-card">
-      <div class="msg-from">📡 ${t('invited_from')}: <b>${esc(m.channel)}</b> · ${esc(m.owner_name || m.owner_username || '')}</div>
-      <div class="msg-title">${esc(m.title)}</div>
-      <div class="msg-meta">📅 ${esc(m.lesson_date)} · 🕒 ${esc(timeStr(m))}${m.topic ? ' · 📚 ' + esc(m.topic) : ''}</div>
-      ${m.note ? `<div class="msg-meta">📝 ${esc(m.note)}</div>` : ''}
-      <div class="row-actions">
-        <button class="btn-primary inline acc" data-id="${m.invite_id}">${t('accept')}</button>
-        <button class="btn-ghost dec" data-id="${m.invite_id}">${t('decline')}</button>
-      </div>
-    </div>`).join('');
-  list.querySelectorAll('.acc').forEach((b) => b.onclick = () => respondInvite(Number(b.dataset.id), 'accept'));
-  list.querySelectorAll('.dec').forEach((b) => b.onclick = () => respondInvite(Number(b.dataset.id), 'decline'));
-}
-async function respondInvite(inviteId, action) {
-  try {
-    await api('/api/messages/' + inviteId + '/' + action, { method: 'POST' });
-    toast(action === 'accept' ? t('toast_accepted') : t('toast_declined'));
-    await loadMessages();
+    // բաժանորդագրումից հետո դասերն ուղիղ երևում են օրացույցում
     lessons = await api('/api/lessons');
-    if (currentView === 'calendar') renderCalendar(), renderUpcoming();
+    renderCalendar(); renderUpcoming();
   } catch (err) { toast(err.message, 'err'); }
 }
 

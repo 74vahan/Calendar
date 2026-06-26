@@ -18,8 +18,8 @@ const PORT = Number(process.env.PORT) || 8080;
 
 // ---- простое JSON-хранилище ----
 let db = {
-  users: [], rooms: [], subscriptions: [], lessons: [], invites: [],
-  seq: { users: 1, rooms: 1, subscriptions: 1, lessons: 1, invites: 1 },
+  users: [], rooms: [], subscriptions: [], lessons: [], todos: [],
+  seq: { users: 1, rooms: 1, subscriptions: 1, lessons: 1, todos: 1 },
 };
 if (existsSync(DB_FILE)) {
   try { db = JSON.parse(readFileSync(DB_FILE, 'utf8')); } catch {}
@@ -119,7 +119,6 @@ app.post('/api/rooms/:id/lessons', auth, (req, res) => {
     return res.status(400).json({ error: 'անվանում, օր և ժամ պարտադիր են' });
   const count = repeat === 'weekly' ? Math.min(Math.max(Number(repeat_count) || 1, 1), 52) : 1;
   const series = count > 1 ? genSeriesId() : null;
-  const subs = db.subscriptions.filter((s) => s.room_id === room.id);
   const created = [];
   for (let i = 0; i < count; i++) {
     const lesson = {
@@ -128,9 +127,6 @@ app.post('/api/rooms/:id/lessons', auth, (req, res) => {
       note: note || null, status: 'scheduled', series_id: series,
     };
     db.lessons.push(lesson);
-    for (const s of subs) {
-      db.invites.push({ id: db.seq.invites++, lesson_id: lesson.id, user_id: s.user_id, state: 'pending' });
-    }
     created.push(lesson);
   }
   save();
@@ -200,12 +196,6 @@ app.post('/api/channels/:roomId/subscribe', auth, (req, res) => {
   if (!db.subscriptions.some((s) => s.room_id === room.id && s.user_id === req.user.id)) {
     db.subscriptions.push({ id: db.seq.subscriptions++, room_id: room.id, user_id: req.user.id });
   }
-  // հրավերներ ապագա դասերի համար
-  const today = todayISO();
-  for (const l of db.lessons.filter((l) => l.room_id === room.id && l.lesson_date >= today)) {
-    if (!db.invites.some((iv) => iv.lesson_id === l.id && iv.user_id === req.user.id))
-      db.invites.push({ id: db.seq.invites++, lesson_id: l.id, user_id: req.user.id, state: 'pending' });
-  }
   save();
   res.json({ ok: true });
 });
@@ -213,59 +203,42 @@ app.post('/api/channels/:roomId/subscribe', auth, (req, res) => {
 app.delete('/api/channels/:roomId/subscribe', auth, (req, res) => {
   const roomId = Number(req.params.roomId);
   db.subscriptions = db.subscriptions.filter((s) => !(s.room_id === roomId && s.user_id === req.user.id));
-  const lessonIds = db.lessons.filter((l) => l.room_id === roomId).map((l) => l.id);
-  db.invites = db.invites.filter((iv) => !(lessonIds.includes(iv.lesson_id) && iv.user_id === req.user.id));
   save();
   res.json({ ok: true });
 });
 
-// ---- aggregated calendar ----
+// ---- aggregated calendar (սեփական + բաժանորդագրված՝ ՈՒՂԻՂ) ----
 app.get('/api/lessons', auth, (req, res) => {
   const ownedRoomIds = db.rooms.filter((r) => r.owner_id === req.user.id).map((r) => r.id);
-  const acceptedLessonIds = new Set(
-    db.invites.filter((iv) => iv.user_id === req.user.id && iv.state === 'accepted').map((iv) => iv.lesson_id)
-  );
-  const out = [];
-  for (const l of db.lessons) {
-    const owned = ownedRoomIds.includes(l.room_id);
-    if (!owned && !acceptedLessonIds.has(l.id)) continue;
-    const room = roomById(l.room_id);
-    out.push({ ...l, room_name: room?.name, channel: room?.channel, owned });
-  }
-  out.sort((a, b) => (a.lesson_date + a.start_time).localeCompare(b.lesson_date + b.start_time));
-  res.json(out);
-});
-
-// ---- messages (հրավերներ) ----
-app.get('/api/messages', auth, (req, res) => {
-  const out = db.invites
-    .filter((iv) => iv.user_id === req.user.id && iv.state === 'pending')
-    .map((iv) => {
-      const l = lessonById(iv.lesson_id);
-      if (!l) return null;
+  const subRoomIds = db.subscriptions.filter((s) => s.user_id === req.user.id).map((s) => s.room_id);
+  const visible = new Set([...ownedRoomIds, ...subRoomIds]);
+  const out = db.lessons
+    .filter((l) => visible.has(l.room_id))
+    .map((l) => {
       const room = roomById(l.room_id);
-      const owner = room ? userById(room.owner_id) : null;
-      return {
-        invite_id: iv.id, state: iv.state,
-        id: l.id, title: l.title, topic: l.topic, lesson_date: l.lesson_date,
-        start_time: l.start_time, end_time: l.end_time, note: l.note, status: l.status,
-        room_name: room?.name, channel: room?.channel,
-        owner_name: owner?.full_name || null, owner_username: owner?.username || null,
-      };
+      return { ...l, room_name: room?.name, channel: room?.channel, owned: ownedRoomIds.includes(l.room_id) };
     })
-    .filter(Boolean)
     .sort((a, b) => (a.lesson_date + a.start_time).localeCompare(b.lesson_date + b.start_time));
   res.json(out);
 });
 
-function setInviteState(req, res, state) {
-  const iv = db.invites.find((x) => x.id === Number(req.params.id) && x.user_id === req.user.id);
-  if (!iv) return res.status(404).json({ error: 'հրավերը չգտնվեց' });
-  iv.state = state; save();
-  res.json(iv);
-}
-app.post('/api/messages/:id/accept', auth, (req, res) => setInviteState(req, res, 'accepted'));
-app.post('/api/messages/:id/decline', auth, (req, res) => setInviteState(req, res, 'declined'));
+// ---- todos ----
+app.get('/api/todos', auth, (req, res) => {
+  res.json(db.todos.filter((tdo) => tdo.user_id === req.user.id)
+    .sort((a, b) => (a.todo_date + (a.todo_time || '')).localeCompare(b.todo_date + (b.todo_time || ''))));
+});
+app.post('/api/todos', auth, (req, res) => {
+  const { todo_date, todo_time, title } = req.body || {};
+  if (!todo_date || !title) return res.status(400).json({ error: 'օր և անվանում պարտադիր են' });
+  const todo = { id: db.seq.todos++, user_id: req.user.id, todo_date, todo_time: todo_time || null, title: title.trim() };
+  db.todos.push(todo); save();
+  res.json(todo);
+});
+app.delete('/api/todos/:id', auth, (req, res) => {
+  db.todos = db.todos.filter((tdo) => !(tdo.id === Number(req.params.id) && tdo.user_id === req.user.id));
+  save();
+  res.json({ ok: true });
+});
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

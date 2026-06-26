@@ -20,8 +20,8 @@
   --st-done: #46c98a;
   --st-cancelled: #f06a6a;
 
-  --radius: 12px;
-  --radius-sm: 9px;
+  --radius: 0px;      /* острые углы */
+  --radius-sm: 0px;
   --shadow: 0 1px 2px rgba(0,0,0,.25);
 }
 
@@ -114,7 +114,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .nav-tab.active { color: var(--text); background: var(--panel-2); font-weight: 500; }
 .badge-count {
   background: var(--accent); color: #fff; font-size: 11px; font-weight: 600;
-  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  min-width: 18px; height: 18px; padding: 0 5px;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .user-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -176,16 +176,17 @@ body.light input[type="date"], body.light input[type="time"] { color-scheme: lig
 .cell.today .num { color: var(--accent); font-weight: 700; }
 .cell.past { opacity: .55; }
 .pill {
-  font-size: 11px; background: var(--st-scheduled); color: #fff; border-radius: 5px;
+  font-size: 11px; background: var(--st-scheduled); color: #fff;
   padding: 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.pill.todo { background: transparent; color: var(--text); border: 1px solid var(--muted); }
 .pill.s-done { background: var(--st-done); }
 .pill.s-cancelled { background: var(--st-cancelled); text-decoration: line-through; }
 .pill.sub { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45); }
 .pill.more { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 
 /* ---------- Badges ---------- */
-.badge { font-size: 11px; padding: 2px 9px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.badge { font-size: 11px; padding: 2px 9px; font-weight: 600; white-space: nowrap; }
 .badge.s-scheduled { background: rgba(108,124,255,.16); color: var(--st-scheduled); }
 .badge.s-done { background: rgba(70,201,138,.16); color: var(--st-done); }
 .badge.s-cancelled { background: rgba(240,106,106,.16); color: var(--st-cancelled); }
@@ -288,6 +289,35 @@ tr.st-cancelled td { opacity: .55; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---------- Auth background quote (Socrates) ---------- */
+.auth-wrap { position: relative; overflow: hidden; }
+.auth-quote {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 40px;
+  text-align: center; pointer-events: none; z-index: 0;
+}
+.auth-quote .q-text {
+  font-size: clamp(20px, 4vw, 40px); font-weight: 700; line-height: 1.25;
+  color: var(--text); opacity: .07; max-width: 1000px; letter-spacing: -0.02em;
+}
+.auth-quote .q-name { margin-top: 18px; font-size: clamp(13px, 1.6vw, 18px); color: var(--text); opacity: .10; font-weight: 600; }
+.auth-card { position: relative; z-index: 1; }
+
+/* ---------- Todos (day modal) ---------- */
+.todo-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+.todo-section h4 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.todo-item {
+  display: flex; align-items: center; gap: 10px; background: var(--panel-2);
+  border: 1px solid var(--border); padding: 8px 11px; margin-bottom: 8px;
+}
+.todo-item .td-time { color: var(--accent); font-weight: 600; font-size: 13px; min-width: 48px; font-variant-numeric: tabular-nums; }
+.todo-item .td-title { flex: 1; font-size: 14px; }
+.todo-item .td-del { color: var(--danger); border-color: var(--danger); padding: 4px 9px; font-size: 12px; }
+.todo-add { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.todo-add input[type="time"] { width: auto; flex: 0 0 auto; }
+.todo-add input[type="text"] { flex: 1; min-width: 120px; }
+.todo-add .btn-primary { width: auto; margin-top: 0; padding: 9px 16px; }
 
 @media (max-width: 640px) {
   .topbar { gap: 10px; padding: 10px 14px; }
