@@ -1,7 +1,10 @@
 -- ============================================================
---  Կալենդար-հարթակ — տվյալների բազայի սխեման
---  users  — օգտատերեր (ադմին + աշակերտներ)
---  lessons — դասեր, որ ադմինը նշանակում է աշակերտին
+--  Կալենդար v2 — Rooms / Channels / Subscriptions / Messages
+--  users    — օգտատերեր (բոլորը հավասար)
+--  rooms    — ժամանակացույց + ունիկալ կանալ
+--  subscriptions — ո՞վ ո՞ր կանալին է բաժանորդագրված
+--  lessons  — դասեր (պատկանում են սենյակին/կանալին)
+--  lesson_invites — «Հաղորդագրություններ»: հրավերներ բաժանորդներին
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
@@ -9,45 +12,53 @@ CREATE TABLE IF NOT EXISTS users (
   username      TEXT UNIQUE NOT NULL,
   full_name     TEXT,
   password_hash TEXT NOT NULL,
-  role          TEXT NOT NULL DEFAULT 'student',   -- 'admin' | 'student'
   created_at    TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS lessons (
+CREATE TABLE IF NOT EXISTS rooms (
+  id         SERIAL PRIMARY KEY,
+  owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  channel    TEXT UNIQUE NOT NULL,          -- ունիկալ կանալի անունը
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id         SERIAL PRIMARY KEY,
+  room_id    INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(room_id, user_id)
+);
+
+-- v1-ի lessons-ը (student_id-ով) անհամատեղելի է նոր մոդելի հետ → վերստեղծում ենք.
+DROP TABLE IF EXISTS lessons CASCADE;
+CREATE TABLE lessons (
   id          SERIAL PRIMARY KEY,
-  student_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title       TEXT NOT NULL,          -- անվանում (название)
-  topic       TEXT,                   -- թեմա (тема)
-  lesson_date DATE NOT NULL,          -- օր (день)
-  start_time  TIME NOT NULL,          -- ժամ (время)
+  room_id     INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  topic       TEXT,
+  lesson_date DATE NOT NULL,
+  start_time  TIME NOT NULL,
   end_time    TIME,
   note        TEXT,
-  status      TEXT NOT NULL DEFAULT 'scheduled',  -- scheduled | done | cancelled
-  series_id   TEXT,                   -- խումբ կրկնվող դասերի համար (группа повторов)
-  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  status      TEXT NOT NULL DEFAULT 'scheduled',   -- scheduled | done | cancelled
+  series_id   TEXT,                                 -- կրկնվող դասերի խումբ
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
--- Միգրացիա հին բազաների համար (CREATE IF NOT EXISTS-ը նոր սյուներ չի ավելացնում).
-ALTER TABLE lessons ADD COLUMN IF NOT EXISTS status    TEXT NOT NULL DEFAULT 'scheduled';
-ALTER TABLE lessons ADD COLUMN IF NOT EXISTS series_id TEXT;
+CREATE TABLE IF NOT EXISTS lesson_invites (
+  id         SERIAL PRIMARY KEY,
+  lesson_id  INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  state      TEXT NOT NULL DEFAULT 'pending',       -- pending | accepted | declined
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(lesson_id, user_id)
+);
 
-CREATE INDEX IF NOT EXISTS idx_lessons_student ON lessons(student_id);
-CREATE INDEX IF NOT EXISTS idx_lessons_date    ON lessons(lesson_date);
-CREATE INDEX IF NOT EXISTS idx_lessons_series  ON lessons(series_id);
-
--- ============================================================
---  ԱԴՄԻՆ
---  Օգտանուն (login):  Vahan
---  Գաղտնաբառ (password): Vahan123
---  Ստորև պահվում է bcrypt-hash-ը (rounds=10), ոչ թե բուն գաղտնաբառը։
---  Անվտանգության համար առաջին մուտքից հետո խորհուրդ է տրվում փոխել գաղտնաբառը։
--- ============================================================
-INSERT INTO users (username, full_name, password_hash, role)
-VALUES (
-  'Vahan',
-  'Vahan Asoyan',
-  '$2a$10$bKb0ciLOkYbgaXNvrb26bee/APNgsLGEmxlBTiO5jNpIL0HyxKr0y',  -- Vahan123
-  'admin'
-)
-ON CONFLICT (username) DO NOTHING;
+CREATE INDEX IF NOT EXISTS idx_lessons_room      ON lessons(room_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_series    ON lessons(series_id);
+CREATE INDEX IF NOT EXISTS idx_subs_user         ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subs_room         ON subscriptions(room_id);
+CREATE INDEX IF NOT EXISTS idx_invites_user      ON lesson_invites(user_id, state);
+CREATE INDEX IF NOT EXISTS idx_invites_lesson    ON lesson_invites(lesson_id);

@@ -34,18 +34,25 @@ jobs:
           node --check backend/server.local.js
           node --check frontend/app.js
 
-      - name: Smoke test (auth flow on local server)
+      - name: Smoke test (register + login + room flow)
         run: |
           node backend/server.local.js &
           PID=$!
           for i in $(seq 1 20); do curl -fsS http://localhost:8080/api/health && break || sleep 1; done
-          echo "--- admin login ---"
-          RESP=$(curl -fsS -X POST http://localhost:8080/api/login \
+          echo "--- register ---"
+          REG=$(curl -fsS -X POST http://localhost:8080/api/register \
             -H 'Content-Type: application/json' \
-            -d '{"username":"Vahan","password":"Vahan123"}')
-          echo "$RESP"
-          echo "$RESP" | grep -q '"role":"admin"' || { echo "❌ admin login failed"; kill $PID; exit 1; }
-          echo "✅ admin login OK"
+            -d '{"username":"ci_user","password":"ci_pass","full_name":"CI"}')
+          echo "$REG"
+          TOKEN=$(echo "$REG" | sed -E 's/.*"token":"([^"]+)".*/\1/')
+          [ -n "$TOKEN" ] || { echo "❌ register failed"; kill $PID; exit 1; }
+          echo "--- create room ---"
+          ROOM=$(curl -fsS -X POST http://localhost:8080/api/rooms \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"name":"CI Room","channel":"ci-channel"}')
+          echo "$ROOM"
+          echo "$ROOM" | grep -q '"channel":"ci-channel"' || { echo "❌ room create failed"; kill $PID; exit 1; }
+          echo "✅ register + room OK"
           kill $PID
 
       - name: Validate docker-compose

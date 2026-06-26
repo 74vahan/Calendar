@@ -1,110 +1,96 @@
-# 📅 Դասերի կալենդար (Calendar)
+# 📅 Calendar — Rooms · Channels · Subscriptions
 
-Վեբ-հարթակ, որտեղ **աշակերտը** գրանցվում/մուտք է գործում և տեսնում է իր դասերը
-ամսական կալենդարում (թեմա, անվանում, օր, ժամ), իսկ **ադմինը** ստեղծում/նշանակում է դասերը։
+Многопользовательский календарь-планировщик. **Каждый** регистрируется и равен в правах:
+- создаёт свои **комнаты** (расписания), у каждой — уникальный **канал**;
+- добавляет в комнату уроки (с повторами и статусами);
+- листает раздел **Каналы** и **подписывается** на чужие каналы;
+- когда владелец канала добавляет урок, он рассылается всем подписчикам как приглашение
+  в раздел **Сообщения**, где каждый **принимает или отклоняет**;
+- личный **Календарь** агрегирует: уроки своих комнат + принятые приглашения из каналов.
 
-## Տեխնոլոգիաներ
-Node.js + Express + JWT + PostgreSQL, frontend՝ vanilla JS, nginx, Docker Compose
-(նույն stack-ը, ինչ StudyHub-ը)։
+UI: тёмная/светлая тема, 3 языка (🇦🇲 hy / 🇷🇺 ru / 🇬🇧 en), минимализм, шрифт Inter
+(с fallback на `CoFo Sans` — положи лицензионные файлы и подключи через `@font-face`).
 
-## Ադմին (зашит в `db/schema.sql`)
-- Օգտանուն: **Vahan**
-- Գաղտնաբառ: **Vahan123**
+## Технологии
+Node.js + Express + JWT + PostgreSQL, frontend — vanilla JS, nginx, Docker Compose.
 
-> ⚠️ Առաջին մուտքից հետո խորհուրդ է տրվում փոխել գաղտնաբառը (թույլ է)։
-> Հաշիվը ստեղծվում է `db/schema.sql`-ում պահված bcrypt-hash-ով։
+## Как работает
+1. **Регистрация / вход** — любой пользователь.
+2. **Мои комнаты** — создай комнату (название + канал), выбери её → добавляй уроки
+   (название, тема, дата, начало/конец, заметка, **повтор** еженедельно, **статус**).
+3. **Каналы** — список всех каналов; подписка/отписка. При подписке приходят приглашения
+   на все будущие уроки канала.
+4. **Сообщения** — приглашения с кнопками «Принять / Отклонить». Принятые попадают в Календарь.
+5. **Календарь** — месячная сетка: свои уроки + принятые; цвет по статусу
+   (запланирован / проведён / отменён), блок «Ближайшие уроки».
 
-## Ինչպես է աշխատում
-- **Աշակերտ** → գրանցվում է → մուտք → տեսնում է **միայն իր** դասերը ամսական ցանցում,
-  սեղմում է օրվա վրա → մանրամասներ (թեմա / անվանում / ժամ)։
-- **Ադմին** → մուտք `Vahan/Vahan123`-ով → ձև՝ դաս նշանակելու համար
-  (աշակերտ, անվանում, թեմա, օր, սկիզբ/ավարտ, նշում), կարող է խմբագրել/ջնջել,
-  ինչպես նաև դիտել ընտրված աշակերտի կալենդարը։
-
----
-
-## Локальный запуск
+## Локальный запуск (без Docker/Postgres)
 ```bash
-docker compose up -d --build
-# открой http://localhost:8088
+cd backend && npm install && npm run dev
+# открой http://localhost:8080
 ```
-Войти как админ: **Vahan / Vahan123**. Зарегистрировать ученика во вкладке «Գրանցում».
+Данные — в `backend/data/db.json`. Зарегистрируй пару пользователей и проверь поток
+комната → подписка → сообщения.
+
+Прод-режим (Docker): `docker compose up -d --build` → http://localhost:8088.
 
 ## Деплой на сервер (существующий vibecode-server)
-Сайт ставится **рядом** со study-platform на той же VM, на порту **8088**
-(study-platform занимает 80). Все порты на сервере уже открыты firewall-ом `allow_all`
-из `../Server`.
-
-PowerShell:
+Сайт ставится **рядом** со study-platform на той же VM, на порту **8088**.
 ```powershell
 .\deploy.ps1            # IP возьмётся из terraform output в ../Server
-# или: .\deploy.ps1 <EXTERNAL_IP>
 ```
-bash:
 ```bash
 ./deploy.sh            # или ./deploy.sh <EXTERNAL_IP>
 ```
-После деплоя: `http://<EXTERNAL_IP>:8088`.
-
 > Для прод-деплоя скопируй `.env.example` → `.env` и задай сильные `DB_PASSWORD`/`JWT_SECRET`.
-
-## SSH public key
-Сервер и ключ управляются terraform-ом в `../Server`. Получить публичный ключ:
-```bash
-terraform -chdir=../Server output -raw public_key_openssh
-# либо вывести из приватного ключа:
-ssh-keygen -y -f ../Server/vibecode-server-key.pem
-```
 
 ## Структура
 ```
 calendar/
-├── db/schema.sql          # схема + сид админа (Vahan)
-├── backend/               # Express API (auth, lessons, admin)
-│   ├── server.js  db.js  package.json  Dockerfile
-├── frontend/              # index.html, app.js, styles.css (армянский UI)
+├── db/schema.sql          # users, rooms, subscriptions, lessons, lesson_invites
+├── backend/               # Express API
+│   ├── server.js          # прод (Postgres)
+│   ├── server.local.js    # локальный режим (JSON-файл, без БД)
+│   ├── db.js  package.json  Dockerfile
+├── frontend/              # index.html, app.js, i18n.js, styles.css
 ├── nginx/default.conf
 ├── docker-compose.yml     # db + backend + nginx (порт 8088)
-├── deploy.ps1 / deploy.sh
-└── .env.example
+├── terraform/             # деплой на vibecode-server
+└── deploy.ps1 / deploy.sh
 ```
 
 ## API
 | Метод | Путь | Доступ | Назначение |
 |-------|------|--------|------------|
-| POST | /api/register | — | регистрация ученика |
+| POST | /api/register | — | регистрация |
 | POST | /api/login | — | вход, выдаёт JWT |
 | GET  | /api/me | auth | текущий пользователь |
-| GET  | /api/lessons | auth | ученик: свои; админ: все / `?student_id=` |
-| GET  | /api/students | admin | список учеников |
-| POST | /api/lessons | admin | создать урок |
-| PUT  | /api/lessons/:id | admin | изменить урок |
-| DELETE | /api/lessons/:id | admin | удалить урок |
+| POST | /api/rooms | auth | создать комнату + канал |
+| GET  | /api/rooms | auth | мои комнаты |
+| GET  | /api/rooms/:id/lessons | owner | уроки комнаты |
+| POST | /api/rooms/:id/lessons | owner | создать урок(и) + рассылка приглашений |
+| PUT  | /api/lessons/:id | owner | изменить урок |
+| PATCH | /api/lessons/:id/status | owner | статус (scheduled/done/cancelled) |
+| DELETE | /api/lessons/:id`[?series=1]` | owner | удалить урок / серию |
+| GET  | /api/channels | auth | все каналы (+ подписан ли я) |
+| POST/DELETE | /api/channels/:roomId/subscribe | auth | подписка / отписка |
+| GET  | /api/lessons | auth | агрегированный календарь (свои + принятые) |
+| GET  | /api/messages | auth | мои приглашения (pending) |
+| POST | /api/messages/:id/accept`\|`/decline | auth | принять / отклонить |
 
 ## CI/CD (GitHub Actions)
-Пайплайн: [`.github/workflows/calendar-ci-cd.yml`](../.github/workflows/calendar-ci-cd.yml)
-(в корне репозитория `74vahan/less`). Срабатывает только на изменения в `calendar/**`.
+Пайплайн [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) в репозитории `74vahan/calendar`.
+- **CI** (push + PR): `npm ci`, syntax-check, smoke-тест (register + создание комнаты) на
+  `server.local.js`, валидация `docker-compose`, сборка backend-образа.
+- **CD** (push в `main`): пакует проект, копирует по SSH на `vibecode-server`,
+  `docker compose up -d --build`. Сайт → `http://<SERVER_HOST>:8088`.
 
-- **CI** (push + PR): `npm ci`, syntax-check, smoke-тест входа админом на `server.local.js`,
-  валидация `docker-compose`, сборка backend-образа.
-- **CD** (push в `master`): пакует проект, копирует по SSH на `vibecode-server`,
-  поднимает `docker compose up -d --build`. Сайт → `http://<SERVER_HOST>:8088`.
-
-### Нужные секреты (Settings → Secrets and variables → Actions)
+### Секреты (Settings → Secrets and variables → Actions)
 | Секрет | Значение |
 |--------|----------|
 | `SSH_PRIVATE_KEY` | содержимое `Server/vibecode-server-key.pem` (весь файл, с BEGIN/END) |
-| `SERVER_HOST` | `34.179.230.9` (статический external IP, не меняется) |
+| `SERVER_HOST` | `34.179.230.9` (статический external IP) |
 | `SERVER_USER` | `vahan` |
 
-`.env` (DB_PASSWORD/JWT_SECRET) на сервере создаётся автоматически случайными значениями при первом
-деплое и **переиспользуется** при последующих — секреты БД хранить в GitHub не нужно.
-
-### Включить
-```bash
-# из корня репозитория (74vahan/less):
-git add calendar .github/workflows/calendar-ci-cd.yml Server/outputs.tf
-git commit -m "calendar: app + CI/CD"
-git push origin master
-```
-После пуша — добавь секреты выше, и деплой пойдёт автоматически. Вкладка **Actions** покажет прогон.
+`.env` (DB_PASSWORD/JWT_SECRET) на сервере создаётся автоматически при первом деплое и
+переиспользуется далее.

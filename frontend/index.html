@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title data-i18n="app_title">Դասերի կալենդար</title>
+  <title data-i18n="app_title">Կալենդար</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -13,12 +16,11 @@
       <div class="auth-top">
         <select id="lang-auth" class="lang-select" aria-label="language"></select>
       </div>
-      <h1>📅 <span data-i18n="app_title">Դասերի կալենդար</span></h1>
+      <h1 data-i18n="app_title">Կալենդար</h1>
       <div class="tabs">
         <button id="tab-login" class="tab active" data-i18n="tab_login">Մուտք</button>
         <button id="tab-register" class="tab" data-i18n="tab_register">Գրանցում</button>
       </div>
-
       <form id="auth-form">
         <div id="fullname-row" class="hidden">
           <label data-i18n="full_name">Անուն Ազգանուն</label>
@@ -37,7 +39,16 @@
   <!-- ====== Հիմնական էկրան ====== -->
   <div id="app" class="hidden">
     <header class="topbar">
-      <div class="brand">📅 <span data-i18n="app_title">Դասերի կալենդար</span></div>
+      <div class="brand">📅 <span data-i18n="app_title">Կալենդար</span></div>
+      <nav class="nav">
+        <button class="nav-tab active" data-view="calendar" data-i18n="nav_calendar">Կալենդար</button>
+        <button class="nav-tab" data-view="rooms" data-i18n="nav_rooms">Իմ սենյակները</button>
+        <button class="nav-tab" data-view="channels" data-i18n="nav_channels">Կանալներ</button>
+        <button class="nav-tab" data-view="messages">
+          <span data-i18n="nav_messages">Հաղորդագրություններ</span>
+          <span id="msg-badge" class="badge-count hidden">0</span>
+        </button>
+      </nav>
       <div class="user-box">
         <select id="lang-app" class="lang-select" aria-label="language"></select>
         <button id="theme-toggle" class="btn-ghost icon-btn" title="theme">🌙</button>
@@ -46,102 +57,128 @@
       </div>
     </header>
 
-    <!-- Աշակերտի՝ առաջիկա դասերը -->
-    <section id="upcoming" class="hidden card">
-      <h2 data-i18n="upcoming">Առաջիկա դասեր</h2>
-      <div id="upcoming-body"></div>
-    </section>
+    <!-- ===== VIEW: Կալենդար ===== -->
+    <main id="view-calendar" class="view">
+      <section id="upcoming" class="card">
+        <h2 data-i18n="upcoming">Առաջիկա դասեր</h2>
+        <div id="upcoming-body"></div>
+      </section>
 
-    <!-- Ադմինի վահանակ -->
-    <section id="admin-panel" class="hidden card">
-      <h2 data-i18n="new_lesson">Նոր դաս նշանակել</h2>
-      <form id="lesson-form" class="lesson-form">
-        <input type="hidden" id="lesson-id" />
-        <div class="grid">
-          <div>
-            <label data-i18n="f_student">Աշակերտ</label>
-            <select id="f-student" required></select>
-          </div>
-          <div>
-            <label data-i18n="f_title">Անվանում</label>
-            <input id="f-title" type="text" data-i18n-ph="f_title_ph" required />
-          </div>
-          <div>
-            <label data-i18n="f_topic">Թեմա</label>
-            <input id="f-topic" type="text" data-i18n-ph="f_topic" />
-          </div>
-          <div class="full datetime-block">
-            <div class="dt-head">🗓 <span data-i18n="date_time">Օր և ժամ</span></div>
-            <div class="dt-fields">
-              <div class="dt-field">
-                <label>📅 <span data-i18n="day">Օր</span></label>
-                <input id="f-date" type="date" required />
-              </div>
-              <div class="dt-field">
-                <label>🕒 <span data-i18n="start">Սկիզբ</span></label>
-                <input id="f-start" type="time" required />
-              </div>
-              <div class="dt-field">
-                <label>🕓 <span data-i18n="end">Ավարտ</span></label>
-                <input id="f-end" type="time" />
-              </div>
-            </div>
-          </div>
-          <div id="repeat-block" class="full repeat-block">
-            <div class="dt-field">
-              <label data-i18n="repeat">Կրկնություն</label>
-              <select id="f-repeat">
-                <option value="none" data-i18n="repeat_none">Առանց կրկնության</option>
-                <option value="weekly" data-i18n="repeat_weekly">Ամեն շաբաթ</option>
-              </select>
-            </div>
-            <div id="repeat-count-field" class="dt-field hidden">
-              <label data-i18n="repeat_count">Քանի անգամ</label>
-              <input id="f-repeat-count" type="number" min="1" max="52" value="8" />
-            </div>
-          </div>
-          <div class="full">
-            <label data-i18n="note">Նշում</label>
-            <input id="f-note" type="text" data-i18n-ph="note_ph" />
-          </div>
+      <section class="card">
+        <div class="cal-head">
+          <button id="prev" class="btn-ghost nav-btn">‹</button>
+          <h2 id="cal-title"></h2>
+          <button id="next" class="btn-ghost nav-btn">›</button>
+          <button id="today-btn" class="btn-ghost" data-i18n="today">Այսօր</button>
         </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary" id="lesson-submit" data-i18n="btn_add">Ավելացնել</button>
-          <button type="button" class="btn-ghost hidden" id="lesson-cancel" data-i18n="btn_cancel">Չեղարկել</button>
+        <div class="legend">
+          <span class="lg"><i class="dot s-scheduled"></i><span data-i18n="st_scheduled">Նշանակված</span></span>
+          <span class="lg"><i class="dot s-done"></i><span data-i18n="st_done">Անցկացված</span></span>
+          <span class="lg"><i class="dot s-cancelled"></i><span data-i18n="st_cancelled">Չեղարկված</span></span>
         </div>
-        <p id="lesson-error" class="error"></p>
-      </form>
+        <div class="weekdays" id="weekdays"></div>
+        <div id="calendar" class="calendar"></div>
+      </section>
+    </main>
 
-      <div class="filter-row">
-        <label data-i18n="show_calendar_of">Ցույց տալ աշակերտի կալենդարը՝</label>
-        <select id="filter-student">
-          <option value="" data-i18n="all_lessons_opt">— Բոլոր դասերը (ցանկ) —</option>
-        </select>
-      </div>
-    </section>
+    <!-- ===== VIEW: Իմ սենյակները ===== -->
+    <main id="view-rooms" class="view hidden">
+      <section class="card">
+        <h2 data-i18n="create_room">Ստեղծել սենյակ</h2>
+        <form id="room-form" class="room-form">
+          <div class="grid2">
+            <div>
+              <label data-i18n="room_name">Սենյակի անուն</label>
+              <input id="r-name" type="text" data-i18n-ph="room_name_ph" required />
+            </div>
+            <div>
+              <label data-i18n="channel_name">Կանալի անուն</label>
+              <input id="r-channel" type="text" data-i18n-ph="channel_name_ph" required />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" data-i18n="btn_create_room">Ստեղծել</button>
+          </div>
+          <p id="room-error" class="error"></p>
+        </form>
+        <h3 class="sub-h" data-i18n="my_rooms">Իմ սենյակները</h3>
+        <div id="rooms-list"></div>
+      </section>
 
-    <!-- Կալենդար -->
-    <section class="card">
-      <div class="cal-head">
-        <button id="prev" class="btn-ghost nav-btn">‹</button>
-        <h2 id="cal-title"></h2>
-        <button id="next" class="btn-ghost nav-btn">›</button>
-        <button id="today-btn" class="btn-ghost" data-i18n="today">Այսօր</button>
-      </div>
-      <div class="legend">
-        <span class="lg"><i class="dot s-scheduled"></i><span data-i18n="st_scheduled">Նշանակված</span></span>
-        <span class="lg"><i class="dot s-done"></i><span data-i18n="st_done">Անցկացված</span></span>
-        <span class="lg"><i class="dot s-cancelled"></i><span data-i18n="st_cancelled">Չեղարկված</span></span>
-      </div>
-      <div class="weekdays" id="weekdays"></div>
-      <div id="calendar" class="calendar"></div>
-    </section>
+      <!-- Ընտրված սենյակի ժամանակացույց -->
+      <section id="room-schedule" class="card hidden">
+        <h2><span data-i18n="room_schedule">Սենյակի ժամանակացույց</span>: <span id="active-room-name"></span></h2>
+        <form id="lesson-form" class="lesson-form">
+          <input type="hidden" id="lesson-id" />
+          <div class="grid">
+            <div>
+              <label data-i18n="f_title">Անվանում</label>
+              <input id="f-title" type="text" data-i18n-ph="f_title_ph" required />
+            </div>
+            <div>
+              <label data-i18n="f_topic">Թեմա</label>
+              <input id="f-topic" type="text" data-i18n-ph="f_topic" />
+            </div>
+            <div class="full datetime-block">
+              <div class="dt-head">🗓 <span data-i18n="date_time">Օր և ժամ</span></div>
+              <div class="dt-fields">
+                <div class="dt-field">
+                  <label>📅 <span data-i18n="day">Օր</span></label>
+                  <input id="f-date" type="date" required />
+                </div>
+                <div class="dt-field">
+                  <label>🕒 <span data-i18n="start">Սկիզբ</span></label>
+                  <input id="f-start" type="time" required />
+                </div>
+                <div class="dt-field">
+                  <label>🕓 <span data-i18n="end">Ավարտ</span></label>
+                  <input id="f-end" type="time" />
+                </div>
+              </div>
+            </div>
+            <div id="repeat-block" class="full repeat-block">
+              <div class="dt-field">
+                <label data-i18n="repeat">Կրկնություն</label>
+                <select id="f-repeat">
+                  <option value="none" data-i18n="repeat_none">Առանց կրկնության</option>
+                  <option value="weekly" data-i18n="repeat_weekly">Ամեն շաբաթ</option>
+                </select>
+              </div>
+              <div id="repeat-count-field" class="dt-field hidden">
+                <label data-i18n="repeat_count">Քանի անգամ</label>
+                <input id="f-repeat-count" type="number" min="1" max="52" value="8" />
+              </div>
+            </div>
+            <div class="full">
+              <label data-i18n="note">Նշում</label>
+              <input id="f-note" type="text" data-i18n-ph="note_ph" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" id="lesson-submit" data-i18n="btn_add">Ավելացնել դաս</button>
+            <button type="button" class="btn-ghost hidden" id="lesson-cancel" data-i18n="btn_cancel">Չեղարկել</button>
+          </div>
+          <p id="lesson-error" class="error"></p>
+        </form>
+        <div id="lessons-table"></div>
+      </section>
+    </main>
 
-    <!-- Ադմինի դասերի ցանկ (երբ ֆիլտր չկա) -->
-    <section id="admin-list" class="hidden card">
-      <h2 data-i18n="all_lessons">Բոլոր դասերը</h2>
-      <div id="lessons-table"></div>
-    </section>
+    <!-- ===== VIEW: Կանալներ ===== -->
+    <main id="view-channels" class="view hidden">
+      <section class="card">
+        <h2 data-i18n="channels_title">Բոլոր կանալները</h2>
+        <div id="channels-list"></div>
+      </section>
+    </main>
+
+    <!-- ===== VIEW: Հաղորդագրություններ ===== -->
+    <main id="view-messages" class="view hidden">
+      <section class="card">
+        <h2 data-i18n="messages_title">Հրավերներ</h2>
+        <div id="messages-list"></div>
+      </section>
+    </main>
   </div>
 
   <!-- Օրվա դասերի մոդալ -->
@@ -155,7 +192,6 @@
     </div>
   </div>
 
-  <!-- Toast-եր -->
   <div id="toasts" class="toasts"></div>
 
   <script src="i18n.js"></script>
