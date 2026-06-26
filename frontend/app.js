@@ -4,13 +4,80 @@ let me = null;            // { id, username, role }
 let lessons = [];         // ընթացիկ ցուցադրվող դասերը
 let viewYear, viewMonth;  // ցուցադրվող ամիսը (0-11)
 let students = [];        // ադմինի համար
-let filterStudent = '';   // ադմին: որ աշակերտի կալենդարն ենք նայում
+let filterStudent = '';   // ադմին: որ աշակերտի կալենդարը
 
-const MONTHS = ['Հունվար','Փետրվար','Մարտ','Ապրիլ','Մայիս','Հունիս',
-  'Հուլիս','Օգոստոս','Սեպտեմբեր','Հոկտեմբեր','Նոյեմբեր','Դեկտեմբեր'];
-const WEEKDAYS = ['Երկ','Երք','Չրք','Հնգ','Ուր','Շբթ','Կիր']; // երկուշաբթիից
+// ====== Լեզու / Theme ======
+let lang = localStorage.getItem('lang') || 'hy';
+if (!LANGS.includes(lang)) lang = 'hy';
+let theme = localStorage.getItem('theme') || 'dark';
 
 const $ = (id) => document.getElementById(id);
+
+function t(key, params) {
+  let s = (I18N[lang] && I18N[lang][key]) ?? (I18N.hy[key] ?? key);
+  if (params) for (const k in params) s = s.replace('{' + k + '}', params[k]);
+  return s;
+}
+function months() { return CAL_LOCALE[lang].months; }
+function weekdays() { return CAL_LOCALE[lang].weekdays; }
+
+// Կիրառել ստատիկ թարգմանությունները DOM-ում
+function applyStatic() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  // auth submit-ի տեքստը կախված է ռեժիմից
+  $('auth-submit').textContent = mode === 'login' ? t('btn_login') : t('btn_register');
+}
+
+function fillLangSelect(sel) {
+  sel.innerHTML = LANGS.map((l) =>
+    `<option value="${l}" ${l === lang ? 'selected' : ''}>${I18N[l]._label}</option>`).join('');
+}
+
+function setLang(l) {
+  if (!LANGS.includes(l)) return;
+  lang = l;
+  localStorage.setItem('lang', l);
+  fillLangSelect($('lang-auth'));
+  fillLangSelect($('lang-app'));
+  applyStatic();
+  // վերաշարադրել դինամիկ մասերը
+  if (me) {
+    renderWho();
+    renderWeekdays();
+    renderCalendar();
+    if (me.role === 'admin') { renderStudentSelects(); renderAdminList(); }
+    else { renderUpcoming(); }
+  }
+}
+
+function applyTheme() {
+  document.body.classList.toggle('light', theme === 'light');
+  $('theme-toggle').textContent = theme === 'light' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  theme = theme === 'light' ? 'dark' : 'light';
+  localStorage.setItem('theme', theme);
+  applyTheme();
+}
+
+// ====== Toast ======
+let toastSeq = 0;
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  const id = ++toastSeq;
+  el.dataset.id = id;
+  setTimeout(() => { el.classList.add('hide'); }, 2600);
+  setTimeout(() => { el.remove(); }, 3000);
+}
 
 // ====== API օգնականներ ======
 function authHeaders(extra = {}) {
@@ -20,7 +87,7 @@ async function api(path, opts = {}) {
   const res = await fetch(path, opts);
   let data = null;
   try { data = await res.json(); } catch {}
-  if (!res.ok) throw new Error((data && data.error) || 'Սխալ');
+  if (!res.ok) throw new Error((data && data.error) || t('err_generic'));
   return data;
 }
 
@@ -33,9 +100,13 @@ function setMode(m) {
   $('tab-login').classList.toggle('active', m === 'login');
   $('tab-register').classList.toggle('active', m === 'register');
   $('fullname-row').classList.toggle('hidden', m !== 'register');
-  $('auth-submit').textContent = m === 'login' ? 'Մուտք' : 'Գրանցվել';
+  $('auth-submit').textContent = m === 'login' ? t('btn_login') : t('btn_register');
   $('auth-error').textContent = '';
 }
+
+$('lang-auth').onchange = (e) => setLang(e.target.value);
+$('lang-app').onchange = (e) => setLang(e.target.value);
+$('theme-toggle').onclick = toggleTheme;
 
 $('auth-form').onsubmit = async (e) => {
   e.preventDefault();
@@ -66,19 +137,22 @@ $('logout').onclick = () => {
   $('auth').classList.remove('hidden');
 };
 
+function renderWho() {
+  $('who').textContent = me.username + (me.role === 'admin' ? ' (' + t('admin') + ')' : '');
+}
+
 // ====== Boot ======
 async function boot() {
   try {
     me = await api('/api/me', { headers: authHeaders() });
   } catch {
-    // անվավեր թոքեն
     token = null; localStorage.removeItem('token');
     $('auth').classList.remove('hidden'); $('app').classList.add('hidden');
     return;
   }
   $('auth').classList.add('hidden');
   $('app').classList.remove('hidden');
-  $('who').textContent = me.username + (me.role === 'admin' ? ' (ադմին)' : '');
+  renderWho();
 
   const now = new Date();
   viewYear = now.getFullYear();
@@ -88,10 +162,12 @@ async function boot() {
 
   if (me.role === 'admin') {
     $('admin-panel').classList.remove('hidden');
+    $('upcoming').classList.add('hidden');
     await loadStudents();
   } else {
     $('admin-panel').classList.add('hidden');
     $('admin-list').classList.add('hidden');
+    $('upcoming').classList.remove('hidden');
   }
   await loadLessons();
 }
@@ -99,20 +175,23 @@ async function boot() {
 // ====== Աշակերտներ (ադմին) ======
 async function loadStudents() {
   students = await api('/api/students', { headers: authHeaders() });
+  renderStudentSelects();
+}
+function renderStudentSelects() {
   const opts = students
     .map((s) => `<option value="${s.id}">${esc(s.full_name || s.username)} (${esc(s.username)})</option>`)
     .join('');
-  $('f-student').innerHTML = students.length
-    ? opts
-    : '<option value="">— աշակերտներ դեռ չկան —</option>';
+  const prevFilter = $('filter-student').value;
+  $('f-student').innerHTML = students.length ? opts : `<option value="">${t('no_students')}</option>`;
   $('filter-student').innerHTML =
-    '<option value="">— Բոլոր դասերը (ցանկ) —</option>' + opts;
+    `<option value="">${t('all_lessons_opt')}</option>` + opts;
+  $('filter-student').value = prevFilter;
 }
 
-$('filter-student') && ($('filter-student').onchange = async (e) => {
+$('filter-student').onchange = async (e) => {
   filterStudent = e.target.value;
   await loadLessons();
-});
+};
 
 // ====== Դասեր ======
 async function loadLessons() {
@@ -121,34 +200,42 @@ async function loadLessons() {
   lessons = await api(path, { headers: authHeaders() });
   renderCalendar();
   if (me.role === 'admin') renderAdminList();
+  else renderUpcoming();
+}
+
+// ====== Ամսաթվի օգնականներ ======
+function ymd(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function todayStr() {
+  const n = new Date();
+  return ymd(n.getFullYear(), n.getMonth(), n.getDate());
+}
+function daysBetween(fromStr, toStr) {
+  const [y1, m1, d1] = fromStr.split('-').map(Number);
+  const [y2, m2, d2] = toStr.split('-').map(Number);
+  const a = Date.UTC(y1, m1 - 1, d1), b = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((b - a) / 86400000);
 }
 
 // ====== Կալենդարի ցանց ======
 function renderWeekdays() {
-  $('weekdays').innerHTML = WEEKDAYS.map((d) => `<div>${d}</div>`).join('');
-}
-
-function ymd(y, m, d) {
-  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  $('weekdays').innerHTML = weekdays().map((d) => `<div>${d}</div>`).join('');
 }
 
 function renderCalendar() {
-  $('cal-title').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+  $('cal-title').textContent = `${months()[viewMonth]} ${viewYear}`;
   const cal = $('calendar');
   cal.innerHTML = '';
 
   const first = new Date(viewYear, viewMonth, 1);
-  // JS: 0=կիրակի ... 6=շաբաթ. Մեզ պետք է երկուշաբթիից:
-  let lead = (first.getDay() + 6) % 7;
+  let lead = (first.getDay() + 6) % 7;            // երկուշաբթիից
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
-  // խմբավորում ըստ օրվա
   const byDay = {};
-  for (const l of lessons) {
-    (byDay[l.lesson_date] = byDay[l.lesson_date] || []).push(l);
-  }
+  for (const l of lessons) (byDay[l.lesson_date] = byDay[l.lesson_date] || []).push(l);
 
-  const todayStr = ymd(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  const today = todayStr();
 
   for (let i = 0; i < lead; i++) {
     const c = document.createElement('div');
@@ -159,12 +246,14 @@ function renderCalendar() {
     const key = ymd(viewYear, viewMonth, d);
     const dayLessons = (byDay[key] || []).sort((a, b) => a.start_time.localeCompare(b.start_time));
     const c = document.createElement('div');
-    c.className = 'cell' + (key === todayStr ? ' today' : '');
+    c.className = 'cell'
+      + (key === today ? ' today' : '')
+      + (key < today ? ' past' : '');
     c.innerHTML = `<div class="num">${d}</div>`;
     const shown = dayLessons.slice(0, 2);
     for (const l of shown) {
       const p = document.createElement('div');
-      p.className = 'pill';
+      p.className = 'pill s-' + (l.status || 'scheduled');
       p.textContent = `${l.start_time} ${l.title}`;
       c.appendChild(p);
     }
@@ -179,8 +268,13 @@ function renderCalendar() {
   }
 }
 
-$('prev').onclick = () => { shiftMonth(-1); };
-$('next').onclick = () => { shiftMonth(1); };
+$('prev').onclick = () => shiftMonth(-1);
+$('next').onclick = () => shiftMonth(1);
+$('today-btn').onclick = () => {
+  const n = new Date();
+  viewYear = n.getFullYear(); viewMonth = n.getMonth();
+  renderCalendar();
+};
 function shiftMonth(delta) {
   viewMonth += delta;
   if (viewMonth < 0) { viewMonth = 11; viewYear--; }
@@ -188,30 +282,80 @@ function shiftMonth(delta) {
   renderCalendar();
 }
 
+// ====== Աշակերտի առաջիկա դասերը ======
+function relativeDay(dateStr) {
+  const diff = daysBetween(todayStr(), dateStr);
+  if (diff === 0) return t('today_word');
+  if (diff === 1) return t('tomorrow');
+  return t('in_days', { n: diff });
+}
+function renderUpcoming() {
+  const today = todayStr();
+  const future = lessons
+    .filter((l) => l.lesson_date >= today && l.status !== 'cancelled')
+    .sort((a, b) => (a.lesson_date + a.start_time).localeCompare(b.lesson_date + b.start_time));
+  const body = $('upcoming-body');
+  if (!future.length) {
+    body.innerHTML = `<p class="empty-note">${t('no_upcoming')}</p>`;
+    return;
+  }
+  const [next, ...rest] = future;
+  const dateFmt = (l) => `${Number(l.lesson_date.split('-')[2])} ${months()[Number(l.lesson_date.split('-')[1]) - 1]}`;
+  const time = (l) => l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time;
+
+  let html = `<div class="next-card">
+    <div class="next-tag">${t('next_lesson')} · ${relativeDay(next.lesson_date)}</div>
+    <div class="next-title">${esc(next.title)}</div>
+    <div class="next-meta">📅 ${dateFmt(next)} · 🕒 ${esc(time(next))}</div>
+    ${next.topic ? `<div class="next-meta">📚 ${esc(next.topic)}</div>` : ''}
+    ${next.note ? `<div class="next-meta">📝 ${esc(next.note)}</div>` : ''}
+  </div>`;
+  if (rest.length) {
+    html += '<ul class="up-list">' + rest.slice(0, 6).map((l) =>
+      `<li><span class="up-date">${dateFmt(l)}</span>
+        <span class="up-time">${esc(time(l))}</span>
+        <span class="up-title">${esc(l.title)}</span></li>`).join('') + '</ul>';
+  }
+  body.innerHTML = html;
+}
+
 // ====== Օրվա մոդալ ======
 function openDay(key, dayLessons) {
   const [y, m, d] = key.split('-');
-  $('day-modal-title').textContent = `${Number(d)} ${MONTHS[Number(m) - 1]} ${y}`;
+  $('day-modal-title').textContent = `${Number(d)} ${months()[Number(m) - 1]} ${y}`;
   const body = $('day-modal-body');
   if (!dayLessons.length) {
-    body.innerHTML = '<p class="empty-note">Այս օրը դասեր չկան։</p>';
+    body.innerHTML = `<p class="empty-note">${t('no_lessons_day')}</p>`;
   } else {
     body.innerHTML = dayLessons.map(lessonCard).join('');
     if (me.role === 'admin') wireDayActions();
   }
   $('day-modal').classList.remove('hidden');
 }
+function statusBadge(s) {
+  const st = s || 'scheduled';
+  return `<span class="badge s-${st}">${t('st_' + st)}</span>`;
+}
 function lessonCard(l) {
   const time = l.end_time ? `${l.start_time}–${l.end_time}` : l.start_time;
+  const st = l.status || 'scheduled';
   const adminWho = me.role === 'admin' && l.student_name
     ? `<div class="note">👤 ${esc(l.student_name || l.student_username)}</div>` : '';
-  const actions = me.role === 'admin'
-    ? `<div class="row-actions">
-         <button class="btn-ghost edit" data-id="${l.id}">Խմբագրել</button>
-         <button class="btn-ghost del" data-id="${l.id}">Ջնջել</button>
-       </div>` : '';
-  return `<div class="lesson-item">
-    <div class="time">🕒 ${esc(time)}</div>
+  let actions = '';
+  if (me.role === 'admin') {
+    const statusBtns = `
+      ${st !== 'done' ? `<button class="btn-ghost mk" data-id="${l.id}" data-st="done">✓ ${t('mark_done')}</button>` : ''}
+      ${st !== 'cancelled' ? `<button class="btn-ghost mk" data-id="${l.id}" data-st="cancelled">✕ ${t('mark_cancelled')}</button>` : ''}
+      ${st !== 'scheduled' ? `<button class="btn-ghost mk" data-id="${l.id}" data-st="scheduled">↺ ${t('reset_status')}</button>` : ''}`;
+    actions = `<div class="row-actions">
+         <button class="btn-ghost edit" data-id="${l.id}">${t('edit')}</button>
+         <button class="btn-ghost del" data-id="${l.id}">${t('del')}</button>
+         ${l.series_id ? `<button class="btn-ghost del-series" data-id="${l.id}">${t('del_series')}</button>` : ''}
+       </div>
+       <div class="row-actions status-actions">${statusBtns}</div>`;
+  }
+  return `<div class="lesson-item st-${st}">
+    <div class="li-head"><div class="time">🕒 ${esc(time)}</div>${statusBadge(st)}</div>
     <div class="title">${esc(l.title)}</div>
     ${l.topic ? `<div class="topic">📚 ${esc(l.topic)}</div>` : ''}
     ${l.note ? `<div class="note">📝 ${esc(l.note)}</div>` : ''}
@@ -224,7 +368,13 @@ function wireDayActions() {
     b.onclick = () => { startEdit(Number(b.dataset.id)); closeDay(); };
   });
   document.querySelectorAll('#day-modal-body .del').forEach((b) => {
-    b.onclick = () => delLesson(Number(b.dataset.id));
+    b.onclick = () => delLesson(Number(b.dataset.id), false);
+  });
+  document.querySelectorAll('#day-modal-body .del-series').forEach((b) => {
+    b.onclick = () => delLesson(Number(b.dataset.id), true);
+  });
+  document.querySelectorAll('#day-modal-body .mk').forEach((b) => {
+    b.onclick = () => setStatus(Number(b.dataset.id), b.dataset.st);
   });
 }
 function closeDay() { $('day-modal').classList.add('hidden'); }
@@ -237,30 +387,38 @@ function renderAdminList() {
   $('admin-list').classList.toggle('hidden', !showTable);
   if (!showTable) return;
   if (!lessons.length) {
-    $('lessons-table').innerHTML = '<p class="empty-note">Դեռ դասեր չկան։</p>';
+    $('lessons-table').innerHTML = `<p class="empty-note">${t('no_lessons_yet')}</p>`;
     return;
   }
   const rows = [...lessons]
     .sort((a, b) => (a.lesson_date + a.start_time).localeCompare(b.lesson_date + b.start_time))
-    .map((l) => `<tr>
+    .map((l) => `<tr class="st-${l.status || 'scheduled'}">
       <td>${esc(l.lesson_date)}</td>
       <td>${esc(l.start_time)}${l.end_time ? '–' + esc(l.end_time) : ''}</td>
       <td>${esc(l.student_name || l.student_username || '')}</td>
       <td>${esc(l.title)}</td>
       <td>${esc(l.topic || '')}</td>
+      <td>${statusBadge(l.status)}</td>
       <td>
         <button class="btn-ghost edit" data-id="${l.id}">✎</button>
         <button class="btn-ghost del" data-id="${l.id}">🗑</button>
       </td>
     </tr>`).join('');
   $('lessons-table').innerHTML = `<table>
-    <thead><tr><th>Օր</th><th>Ժամ</th><th>Աշակերտ</th><th>Անվանում</th><th>Թեմա</th><th></th></tr></thead>
+    <thead><tr>
+      <th>${t('th_day')}</th><th>${t('th_time')}</th><th>${t('th_student')}</th>
+      <th>${t('th_title')}</th><th>${t('th_topic')}</th><th>${t('th_status')}</th><th></th>
+    </tr></thead>
     <tbody>${rows}</tbody></table>`;
   $('lessons-table').querySelectorAll('.edit').forEach((b) => b.onclick = () => startEdit(Number(b.dataset.id)));
-  $('lessons-table').querySelectorAll('.del').forEach((b) => b.onclick = () => delLesson(Number(b.dataset.id)));
+  $('lessons-table').querySelectorAll('.del').forEach((b) => b.onclick = () => delLesson(Number(b.dataset.id), false));
 }
 
 // ====== Ադմին: ստեղծել / խմբագրել / ջնջել ======
+$('f-repeat').onchange = (e) => {
+  $('repeat-count-field').classList.toggle('hidden', e.target.value !== 'weekly');
+};
+
 $('lesson-form').onsubmit = async (e) => {
   e.preventDefault();
   $('lesson-error').textContent = '';
@@ -280,16 +438,21 @@ $('lesson-form').onsubmit = async (e) => {
         method: 'PUT', headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
       });
+      toast(t('toast_saved'));
     } else {
-      await api('/api/lessons', {
+      body.repeat = $('f-repeat').value;
+      body.repeat_count = Number($('f-repeat-count').value) || 1;
+      const r = await api('/api/lessons', {
         method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
       });
+      toast(t('toast_created', { n: (r && r.count) || 1 }));
     }
     resetForm();
     await loadLessons();
   } catch (err) {
     $('lesson-error').textContent = err.message;
+    toast(err.message, 'err');
   }
 };
 
@@ -304,7 +467,11 @@ function startEdit(id) {
   $('f-start').value = l.start_time;
   $('f-end').value = l.end_time || '';
   $('f-note').value = l.note || '';
-  $('lesson-submit').textContent = 'Պահպանել';
+  // խմբագրման ժամանակ կրկնությունը թաքցնում ենք (մեկ դաս)
+  $('f-repeat').value = 'none';
+  $('repeat-count-field').classList.add('hidden');
+  $('repeat-block').classList.add('hidden');
+  $('lesson-submit').textContent = t('btn_save');
   $('lesson-cancel').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -312,16 +479,39 @@ $('lesson-cancel').onclick = resetForm;
 function resetForm() {
   $('lesson-form').reset();
   $('lesson-id').value = '';
-  $('lesson-submit').textContent = 'Ավելացնել';
+  $('repeat-block').classList.remove('hidden');
+  $('repeat-count-field').classList.add('hidden');
+  $('lesson-submit').textContent = t('btn_add');
   $('lesson-cancel').classList.add('hidden');
   $('lesson-error').textContent = '';
 }
 
-async function delLesson(id) {
-  if (!confirm('Ջնջե՞լ այս դասը։')) return;
-  await api('/api/lessons/' + id, { method: 'DELETE', headers: authHeaders() });
-  closeDay();
-  await loadLessons();
+async function setStatus(id, status) {
+  try {
+    await api('/api/lessons/' + id + '/status', {
+      method: 'PATCH', headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ status }),
+    });
+    toast(t('toast_status'));
+    closeDay();
+    await loadLessons();
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
+async function delLesson(id, series) {
+  if (!confirm(series ? t('confirm_delete_series') : t('confirm_delete'))) return;
+  try {
+    await api('/api/lessons/' + id + (series ? '?series=1' : ''), {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    toast(t('toast_deleted'));
+    closeDay();
+    await loadLessons();
+  } catch (err) {
+    toast(err.message, 'err');
+  }
 }
 
 // ====== Util ======
@@ -331,4 +521,8 @@ function esc(s) {
 }
 
 // ====== Start ======
+fillLangSelect($('lang-auth'));
+fillLangSelect($('lang-app'));
+applyStatic();
+applyTheme();
 if (token) boot();

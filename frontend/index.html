@@ -3,29 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Դասերի կալենդար</title>
+  <title data-i18n="app_title">Դասերի կալենդար</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <!-- ====== Մուտք / Գրանցում ====== -->
   <div id="auth" class="auth-wrap">
     <div class="auth-card">
-      <h1>📅 Դասերի կալենդար</h1>
+      <div class="auth-top">
+        <select id="lang-auth" class="lang-select" aria-label="language"></select>
+      </div>
+      <h1>📅 <span data-i18n="app_title">Դասերի կալենդար</span></h1>
       <div class="tabs">
-        <button id="tab-login" class="tab active">Մուտք</button>
-        <button id="tab-register" class="tab">Գրանցում</button>
+        <button id="tab-login" class="tab active" data-i18n="tab_login">Մուտք</button>
+        <button id="tab-register" class="tab" data-i18n="tab_register">Գրանցում</button>
       </div>
 
       <form id="auth-form">
         <div id="fullname-row" class="hidden">
-          <label>Անուն Ազգանուն</label>
-          <input id="full_name" type="text" placeholder="Անուն Ազգանուն" />
+          <label data-i18n="full_name">Անուն Ազգանուն</label>
+          <input id="full_name" type="text" data-i18n-ph="full_name" />
         </div>
-        <label>Օգտանուն</label>
+        <label data-i18n="username">Օգտանուն</label>
         <input id="username" type="text" autocomplete="username" required />
-        <label>Գաղտնաբառ</label>
+        <label data-i18n="password">Գաղտնաբառ</label>
         <input id="password" type="password" autocomplete="current-password" required />
-        <button type="submit" id="auth-submit" class="btn-primary">Մուտք</button>
+        <button type="submit" id="auth-submit" class="btn-primary" data-i18n="btn_login">Մուտք</button>
         <p id="auth-error" class="error"></p>
       </form>
     </div>
@@ -34,64 +37,85 @@
   <!-- ====== Հիմնական էկրան ====== -->
   <div id="app" class="hidden">
     <header class="topbar">
-      <div class="brand">📅 Դասերի կալենդար</div>
+      <div class="brand">📅 <span data-i18n="app_title">Դասերի կալենդար</span></div>
       <div class="user-box">
+        <select id="lang-app" class="lang-select" aria-label="language"></select>
+        <button id="theme-toggle" class="btn-ghost icon-btn" title="theme">🌙</button>
         <span id="who"></span>
-        <button id="logout" class="btn-ghost">Ելք</button>
+        <button id="logout" class="btn-ghost" data-i18n="logout">Ելք</button>
       </div>
     </header>
 
+    <!-- Աշակերտի՝ առաջիկա դասերը -->
+    <section id="upcoming" class="hidden card">
+      <h2 data-i18n="upcoming">Առաջիկա դասեր</h2>
+      <div id="upcoming-body"></div>
+    </section>
+
     <!-- Ադմինի վահանակ -->
     <section id="admin-panel" class="hidden card">
-      <h2>Նոր դաս նշանակել</h2>
+      <h2 data-i18n="new_lesson">Նոր դաս նշանակել</h2>
       <form id="lesson-form" class="lesson-form">
         <input type="hidden" id="lesson-id" />
         <div class="grid">
           <div>
-            <label>Աշակերտ</label>
+            <label data-i18n="f_student">Աշակերտ</label>
             <select id="f-student" required></select>
           </div>
           <div>
-            <label>Անվանում</label>
-            <input id="f-title" type="text" placeholder="Դասի անվանում" required />
+            <label data-i18n="f_title">Անվանում</label>
+            <input id="f-title" type="text" data-i18n-ph="f_title_ph" required />
           </div>
           <div>
-            <label>Թեմա</label>
-            <input id="f-topic" type="text" placeholder="Թեմա" />
+            <label data-i18n="f_topic">Թեմա</label>
+            <input id="f-topic" type="text" data-i18n-ph="f_topic" />
           </div>
           <div class="full datetime-block">
-            <div class="dt-head">🗓 Օր և ժամ</div>
+            <div class="dt-head">🗓 <span data-i18n="date_time">Օր և ժամ</span></div>
             <div class="dt-fields">
               <div class="dt-field">
-                <label>📅 Օր</label>
+                <label>📅 <span data-i18n="day">Օր</span></label>
                 <input id="f-date" type="date" required />
               </div>
               <div class="dt-field">
-                <label>🕒 Սկիզբ</label>
+                <label>🕒 <span data-i18n="start">Սկիզբ</span></label>
                 <input id="f-start" type="time" required />
               </div>
               <div class="dt-field">
-                <label>🕓 Ավարտ</label>
+                <label>🕓 <span data-i18n="end">Ավարտ</span></label>
                 <input id="f-end" type="time" />
               </div>
             </div>
           </div>
+          <div id="repeat-block" class="full repeat-block">
+            <div class="dt-field">
+              <label data-i18n="repeat">Կրկնություն</label>
+              <select id="f-repeat">
+                <option value="none" data-i18n="repeat_none">Առանց կրկնության</option>
+                <option value="weekly" data-i18n="repeat_weekly">Ամեն շաբաթ</option>
+              </select>
+            </div>
+            <div id="repeat-count-field" class="dt-field hidden">
+              <label data-i18n="repeat_count">Քանի անգամ</label>
+              <input id="f-repeat-count" type="number" min="1" max="52" value="8" />
+            </div>
+          </div>
           <div class="full">
-            <label>Նշում</label>
-            <input id="f-note" type="text" placeholder="Լրացուցիչ նշում" />
+            <label data-i18n="note">Նշում</label>
+            <input id="f-note" type="text" data-i18n-ph="note_ph" />
           </div>
         </div>
         <div class="form-actions">
-          <button type="submit" class="btn-primary" id="lesson-submit">Ավելացնել</button>
-          <button type="button" class="btn-ghost hidden" id="lesson-cancel">Չեղարկել</button>
+          <button type="submit" class="btn-primary" id="lesson-submit" data-i18n="btn_add">Ավելացնել</button>
+          <button type="button" class="btn-ghost hidden" id="lesson-cancel" data-i18n="btn_cancel">Չեղարկել</button>
         </div>
         <p id="lesson-error" class="error"></p>
       </form>
 
       <div class="filter-row">
-        <label>Ցույց տալ աշակերտի կալենդարը՝</label>
+        <label data-i18n="show_calendar_of">Ցույց տալ աշակերտի կալենդարը՝</label>
         <select id="filter-student">
-          <option value="">— Բոլոր դասերը (ցանկ) —</option>
+          <option value="" data-i18n="all_lessons_opt">— Բոլոր դասերը (ցանկ) —</option>
         </select>
       </div>
     </section>
@@ -99,9 +123,15 @@
     <!-- Կալենդար -->
     <section class="card">
       <div class="cal-head">
-        <button id="prev" class="btn-ghost">‹</button>
+        <button id="prev" class="btn-ghost nav-btn">‹</button>
         <h2 id="cal-title"></h2>
-        <button id="next" class="btn-ghost">›</button>
+        <button id="next" class="btn-ghost nav-btn">›</button>
+        <button id="today-btn" class="btn-ghost" data-i18n="today">Այսօր</button>
+      </div>
+      <div class="legend">
+        <span class="lg"><i class="dot s-scheduled"></i><span data-i18n="st_scheduled">Նշանակված</span></span>
+        <span class="lg"><i class="dot s-done"></i><span data-i18n="st_done">Անցկացված</span></span>
+        <span class="lg"><i class="dot s-cancelled"></i><span data-i18n="st_cancelled">Չեղարկված</span></span>
       </div>
       <div class="weekdays" id="weekdays"></div>
       <div id="calendar" class="calendar"></div>
@@ -109,7 +139,7 @@
 
     <!-- Ադմինի դասերի ցանկ (երբ ֆիլտր չկա) -->
     <section id="admin-list" class="hidden card">
-      <h2>Բոլոր դասերը</h2>
+      <h2 data-i18n="all_lessons">Բոլոր դասերը</h2>
       <div id="lessons-table"></div>
     </section>
   </div>
@@ -119,12 +149,16 @@
     <div class="modal-card">
       <div class="modal-head">
         <h3 id="day-modal-title"></h3>
-        <button id="day-modal-close" class="btn-ghost">✕</button>
+        <button id="day-modal-close" class="btn-ghost icon-btn">✕</button>
       </div>
       <div id="day-modal-body"></div>
     </div>
   </div>
 
+  <!-- Toast-եր -->
+  <div id="toasts" class="toasts"></div>
+
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

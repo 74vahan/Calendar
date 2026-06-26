@@ -36,6 +36,18 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// 'YYYY-MM-DD' + N օր (UTC-ով, որ ժամային գոտին չշեղի օրը)
+function addDays(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+function genSeriesId() {
+  return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+const STATUSES = ['scheduled', 'done', 'cancelled'];
+
 // ---- auth routes ----
 app.post('/api/register', async (req, res) => {
   const { username, password, full_name } = req.body || {};
@@ -116,16 +128,24 @@ app.get('/api/lessons', auth, async (req, res) => {
 });
 
 app.post('/api/lessons', auth, requireAdmin, async (req, res) => {
-  const { student_id, title, topic, lesson_date, start_time, end_time, note } = req.body || {};
+  const { student_id, title, topic, lesson_date, start_time, end_time, note, repeat, repeat_count } = req.body || {};
   if (!student_id || !title || !lesson_date || !start_time)
     return res.status(400).json({ error: 'աշակերտ, անվանում, օր և ժամ պարտադիր են' });
+  // Կրկնվող դասեր՝ ամեն շաբաթ նույն օրը (1..52 անգամ)
+  const count = repeat === 'weekly' ? Math.min(Math.max(Number(repeat_count) || 1, 1), 52) : 1;
+  const series = count > 1 ? genSeriesId() : null;
   try {
-    const r = await pool.query(
-      `INSERT INTO lessons(student_id, title, topic, lesson_date, start_time, end_time, note, created_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [student_id, title, topic || null, lesson_date, start_time, end_time || null, note || null, req.user.id]
-    );
-    res.json(r.rows[0]);
+    const created = [];
+    for (let i = 0; i < count; i++) {
+      const date = addDays(lesson_date, i * 7);
+      const r = await pool.query(
+        `INSERT INTO lessons(student_id, title, topic, lesson_date, start_time, end_time, note, series_id, created_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [student_id, title, topic || null, date, start_time, end_time || null, note || null, series, req.user.id]
+      );
+      created.push(r.rows[0]);
+    }
+    res.json({ count: created.length, lessons: created });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'սերվերի սխալ' });
@@ -156,9 +176,41 @@ app.put('/api/lessons/:id', auth, requireAdmin, async (req, res) => {
   }
 });
 
+// Դասի կարգավիճակը (scheduled | done | cancelled)
+app.patch('/api/lessons/:id/status', auth, requireAdmin, async (req, res) => {
+  const { status } = req.body || {};
+  if (!STATUSES.includes(status)) return res.status(400).json({ error: 'սխալ կարգավիճակ' });
+  try {
+    const r = await pool.query(
+      'UPDATE lessons SET status = $1 WHERE id = $2 RETURNING *',
+      [status, Number(req.params.id)]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'դասը չգտնվեց' });
+    res.json(r.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'սերվերի սխալ' });
+  }
+});
+
 app.delete('/api/lessons/:id', auth, requireAdmin, async (req, res) => {
-  await pool.query('DELETE FROM lessons WHERE id = $1', [Number(req.params.id)]);
-  res.json({ ok: true });
+  try {
+    const id = Number(req.params.id);
+    // ?series=1 → ջնջել ամբողջ կրկնվող շարքը
+    if (req.query.series) {
+      const f = await pool.query('SELECT series_id FROM lessons WHERE id = $1', [id]);
+      const sid = f.rows[0]?.series_id;
+      if (sid) {
+        const r = await pool.query('DELETE FROM lessons WHERE series_id = $1', [sid]);
+        return res.json({ ok: true, deleted: r.rowCount });
+      }
+    }
+    await pool.query('DELETE FROM lessons WHERE id = $1', [id]);
+    res.json({ ok: true, deleted: 1 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'սերվերի սխալ' });
+  }
 });
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

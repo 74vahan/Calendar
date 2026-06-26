@@ -57,6 +57,17 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function addDays(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+function genSeriesId() {
+  return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+const STATUSES = ['scheduled', 'done', 'cancelled'];
+
 app.post('/api/register', async (req, res) => {
   const { username, password, full_name } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'օգտանունը և գաղտնաբառը պարտադիր են' });
@@ -99,15 +110,22 @@ app.get('/api/lessons', auth, (req, res) => {
 });
 
 app.post('/api/lessons', auth, requireAdmin, (req, res) => {
-  const { student_id, title, topic, lesson_date, start_time, end_time, note } = req.body || {};
+  const { student_id, title, topic, lesson_date, start_time, end_time, note, repeat, repeat_count } = req.body || {};
   if (!student_id || !title || !lesson_date || !start_time)
     return res.status(400).json({ error: 'աշակերտ, անվանում, օր և ժամ պարտադիր են' });
-  const lesson = {
-    id: db.seq.lessons++, student_id: Number(student_id), title, topic: topic || null,
-    lesson_date, start_time, end_time: end_time || null, note: note || null, created_by: req.user.id,
-  };
-  db.lessons.push(lesson); save();
-  res.json(lesson);
+  const count = repeat === 'weekly' ? Math.min(Math.max(Number(repeat_count) || 1, 1), 52) : 1;
+  const series = count > 1 ? genSeriesId() : null;
+  const created = [];
+  for (let i = 0; i < count; i++) {
+    const lesson = {
+      id: db.seq.lessons++, student_id: Number(student_id), title, topic: topic || null,
+      lesson_date: addDays(lesson_date, i * 7), start_time, end_time: end_time || null,
+      note: note || null, status: 'scheduled', series_id: series, created_by: req.user.id,
+    };
+    db.lessons.push(lesson); created.push(lesson);
+  }
+  save();
+  res.json({ count: created.length, lessons: created });
 });
 
 app.put('/api/lessons/:id', auth, requireAdmin, (req, res) => {
@@ -125,10 +143,30 @@ app.put('/api/lessons/:id', auth, requireAdmin, (req, res) => {
   res.json(l);
 });
 
+app.patch('/api/lessons/:id/status', auth, requireAdmin, (req, res) => {
+  const l = db.lessons.find((x) => x.id === Number(req.params.id));
+  if (!l) return res.status(404).json({ error: 'դասը չգտնվեց' });
+  const { status } = req.body || {};
+  if (!STATUSES.includes(status)) return res.status(400).json({ error: 'սխալ կարգավիճակ' });
+  l.status = status; save();
+  res.json(l);
+});
+
 app.delete('/api/lessons/:id', auth, requireAdmin, (req, res) => {
-  db.lessons = db.lessons.filter((x) => x.id !== Number(req.params.id));
+  const id = Number(req.params.id);
+  if (req.query.series) {
+    const target = db.lessons.find((x) => x.id === id);
+    const sid = target?.series_id;
+    if (sid) {
+      const before = db.lessons.length;
+      db.lessons = db.lessons.filter((x) => x.series_id !== sid);
+      save();
+      return res.json({ ok: true, deleted: before - db.lessons.length });
+    }
+  }
+  db.lessons = db.lessons.filter((x) => x.id !== id);
   save();
-  res.json({ ok: true });
+  res.json({ ok: true, deleted: 1 });
 });
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

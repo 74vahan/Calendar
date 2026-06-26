@@ -22,12 +22,19 @@ CREATE TABLE IF NOT EXISTS lessons (
   start_time  TIME NOT NULL,          -- ժամ (время)
   end_time    TIME,
   note        TEXT,
+  status      TEXT NOT NULL DEFAULT 'scheduled',  -- scheduled | done | cancelled
+  series_id   TEXT,                   -- խումբ կրկնվող դասերի համար (группа повторов)
   created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
+-- Միգրացիա հին բազաների համար (CREATE IF NOT EXISTS-ը նոր սյուներ չի ավելացնում).
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS status    TEXT NOT NULL DEFAULT 'scheduled';
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS series_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_lessons_student ON lessons(student_id);
 CREATE INDEX IF NOT EXISTS idx_lessons_date    ON lessons(lesson_date);
+CREATE INDEX IF NOT EXISTS idx_lessons_series  ON lessons(series_id);
 
 -- ============================================================
 --  ԱԴՄԻՆ
