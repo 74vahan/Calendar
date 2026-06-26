@@ -39,6 +39,7 @@ function setLang(l) {
   lang = l; localStorage.setItem('lang', l);
   fillLangSelect($('lang-auth')); fillLangSelect($('lang-app'));
   applyStatic();
+  paintQuote();
   if (me) {
     renderWho(); renderWeekdays(); renderCalendar(); renderUpcoming();
     renderRooms(); if (activeRoom) { $('active-room-name').textContent = activeRoom.name; renderRoomTable(); }
@@ -47,7 +48,30 @@ function setLang(l) {
 }
 function applyTheme() {
   document.body.classList.toggle('light', theme === 'light');
-  $('theme-toggle').textContent = theme === 'light' ? '☀️' : '🌙';
+  const icon = theme === 'light' ? '☀️' : '🌙';
+  $('theme-toggle').textContent = icon;
+  $('theme-toggle-auth').textContent = icon;
+}
+
+// ====== Auth: սմենվող մեջբերումներ (Սոկրատես) ======
+let quoteIdx = 0, quoteTimer = null;
+function currentQuotes() { return (I18N[lang] && I18N[lang].socrates_quotes) || I18N.hy.socrates_quotes; }
+function paintQuote() {
+  const el = $('q-text'); if (!el) return;
+  el.textContent = currentQuotes()[quoteIdx % currentQuotes().length];
+}
+function startQuoteRotation() {
+  paintQuote();
+  clearInterval(quoteTimer);
+  quoteTimer = setInterval(() => {
+    const el = $('q-text'); if (!el) return;
+    el.style.opacity = '0';                                   // դանդաղ մարում
+    setTimeout(() => {
+      quoteIdx = (quoteIdx + 1) % currentQuotes().length;
+      paintQuote();
+      el.style.opacity = '1';
+    }, 900);
+  }, 4000);
 }
 function toggleTheme() {
   theme = theme === 'light' ? 'dark' : 'light';
@@ -89,6 +113,7 @@ function setMode(m) {
 $('lang-auth').onchange = (e) => setLang(e.target.value);
 $('lang-app').onchange = (e) => setLang(e.target.value);
 $('theme-toggle').onclick = toggleTheme;
+$('theme-toggle-auth').onclick = toggleTheme;
 
 $('auth-form').onsubmit = async (e) => {
   e.preventDefault();
@@ -521,5 +546,5 @@ function esc(s) {
 
 // ====== Start ======
 fillLangSelect($('lang-auth')); fillLangSelect($('lang-app'));
-applyStatic(); applyTheme();
+applyStatic(); applyTheme(); startQuoteRotation();
 if (token) boot();

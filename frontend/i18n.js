@@ -113,7 +113,11 @@ const I18N = {
     confirm_delete_todo: 'Ջնջե՞լ այս անելիքը։',
     toast_todo_added: 'Անելիքն ավելացվեց',
     toast_todo_deleted: 'Ջնջված է',
-    socrates_quote: 'Փոփոխության գաղտնիքը ոչ թե հնի դեմ պայքարելն է, այլ նոր կառուցելը։',
+    socrates_quotes: [
+      'Փոփոխության գաղտնիքը ոչ թե հնի դեմ պայքարելն է, այլ նորը կառուցելը։',
+      'Չքննված կյանքն ապրելու արժանի չէ։',
+      'Կրթությունը կրակ վառելն է, ոչ թե անոթ լցնելը։',
+    ],
     socrates_name: '— Սոկրատես',
   },
 
@@ -224,7 +228,11 @@ const I18N = {
     confirm_delete_todo: 'Удалить это дело?',
     toast_todo_added: 'Дело добавлено',
     toast_todo_deleted: 'Удалено',
-    socrates_quote: 'Секрет перемен в том, чтобы направить всю энергию не на борьбу со старым, а на создание нового.',
+    socrates_quotes: [
+      'Секрет перемен — направить всю энергию не на борьбу со старым, а на создание нового.',
+      'Жизнь без размышлений не стоит того, чтобы жить.',
+      'Образование — это зажжение пламени, а не наполнение сосуда.',
+    ],
     socrates_name: '— Сократ',
   },
 
@@ -335,7 +343,11 @@ const I18N = {
     confirm_delete_todo: 'Delete this to-do?',
     toast_todo_added: 'To-do added',
     toast_todo_deleted: 'Deleted',
-    socrates_quote: 'The secret of change is to focus all your energy not on fighting the old, but on building the new.',
+    socrates_quotes: [
+      'The secret of change is to focus all your energy not on fighting the old, but on building the new.',
+      'An unexamined life is not worth living.',
+      'Education is the kindling of a flame, not the filling of a vessel.',
+    ],
     socrates_name: '— Socrates',
   },
 };
