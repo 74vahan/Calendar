@@ -90,6 +90,9 @@ jobs:
           ssh -i ~/.ssh/deploy_key "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" bash -s <<'EOF'
           set -e
           command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com | sudo sh; }
+          # ВАЖНО: останавливаем контейнеры ДО удаления папки, иначе nginx остаётся
+          # с bind-mount на удалённый inode ./frontend и отдаёт 403 (пустой html-каталог).
+          [ -f ~/calendar/docker-compose.yml ] && (cd ~/calendar && sudo docker compose down --remove-orphans || true)
           # сохраняем существующий .env (стабильные секреты + пароль БД)
           [ -f ~/calendar/.env ] && cp ~/calendar/.env ~/.calendar.env.bak || true
           rm -rf ~/calendar && mkdir -p ~/calendar
@@ -106,7 +109,8 @@ jobs:
           HTTP_PORT=8088
           ENV
           fi
-          sudo docker compose up -d --build
+          # --force-recreate — подстраховка, чтобы все контейнеры перепривязали свежие bind-mount
+          sudo docker compose up -d --build --force-recreate --remove-orphans
           sudo docker compose ps
           EOF
 
