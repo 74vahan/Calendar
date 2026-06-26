@@ -1,0 +1,107 @@
+name: calendar CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: calendar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------- CI: тесты + сборка ----------------
+  test:
+    name: Test & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend deps
+        run: npm ci
+        working-directory: backend
+
+      - name: Syntax check (backend + frontend)
+        run: |
+          node --check backend/server.js
+          node --check backend/db.js
+          node --check backend/server.local.js
+          node --check frontend/app.js
+
+      - name: Smoke test (auth flow on local server)
+        run: |
+          node backend/server.local.js &
+          PID=$!
+          for i in $(seq 1 20); do curl -fsS http://localhost:8080/api/health && break || sleep 1; done
+          echo "--- admin login ---"
+          RESP=$(curl -fsS -X POST http://localhost:8080/api/login \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"Vahan","password":"Vahan123"}')
+          echo "$RESP"
+          echo "$RESP" | grep -q '"role":"admin"' || { echo "❌ admin login failed"; kill $PID; exit 1; }
+          echo "✅ admin login OK"
+          kill $PID
+
+      - name: Validate docker-compose
+        run: docker compose -f docker-compose.yml config -q
+
+      - name: Build backend image
+        run: docker build -t calendar-backend:ci ./backend
+
+  # ---------------- CD: деплой на vibecode-server ----------------
+  deploy:
+    name: Deploy to vibecode-server
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Pack project (без node_modules / .env)
+        run: tar --exclude='node_modules' --exclude='.git' --exclude='.env' -czf /tmp/calendar.tar.gz -C . .
+
+      - name: Copy to server
+        run: |
+          scp -i ~/.ssh/deploy_key /tmp/calendar.tar.gz \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/calendar.tar.gz"
+
+      - name: Deploy (docker compose up on server)
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" bash -s <<'EOF'
+          set -e
+          command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com | sudo sh; }
+          # сохраняем существующий .env (стабильные секреты + пароль БД)
+          [ -f ~/calendar/.env ] && cp ~/calendar/.env ~/.calendar.env.bak || true
+          rm -rf ~/calendar && mkdir -p ~/calendar
+          tar -xzf ~/calendar.tar.gz -C ~/calendar
+          cd ~/calendar
+          if [ -f ~/.calendar.env.bak ]; then
+            mv ~/.calendar.env.bak .env
+          else
+            cat > .env <<ENV
+          DB_USER=calendar
+          DB_PASSWORD=$(openssl rand -hex 16)
+          DB_NAME=calendar
+          JWT_SECRET=$(openssl rand -hex 32)
+          HTTP_PORT=8088
+          ENV
+          fi
+          sudo docker compose up -d --build
+          sudo docker compose ps
+          EOF
+
+      - name: Done
+        run: echo "✅ Деплой завершён → http://${{ secrets.SERVER_HOST }}:8088"
