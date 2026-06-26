@@ -1,0 +1,11 @@
+{
+  "name": "calendar",
+  "version": "1.0.0",
+  "description": "Դասերի կալենդար — запуск из корня проекта",
+  "private": true,
+  "scripts": {
+    "dev": "node backend/server.local.js",
+    "start": "node backend/server.js",
+    "install:backend": "npm --prefix backend install"
+  }
+}

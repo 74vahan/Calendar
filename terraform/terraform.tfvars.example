@@ -1,0 +1,18 @@
+# Скопируй в terraform.tfvars и заполни своими значениями
+
+# IP сервера — возьми из: cd ../../Server && terraform output external_ip
+server_ip = "1.2.3.4"
+
+# SSH-ключ — по умолчанию ищется в ../../Server/vibecode-server-key.pem
+# ssh_key_path = "../../Server/vibecode-server-key.pem"
+
+# БД
+db_user     = "calendar"
+db_password = "надёжный_пароль"
+db_name     = "calendar"
+
+# JWT
+jwt_secret = "длинная_случайная_строка"
+
+# Порт приложения
+http_port = 8088

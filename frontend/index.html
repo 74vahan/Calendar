@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="hy">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Դասերի կալենդար</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ====== Մուտք / Գրանցում ====== -->
+  <div id="auth" class="auth-wrap">
+    <div class="auth-card">
+      <h1>📅 Դասերի կալենդար</h1>
+      <div class="tabs">
+        <button id="tab-login" class="tab active">Մուտք</button>
+        <button id="tab-register" class="tab">Գրանցում</button>
+      </div>
+
+      <form id="auth-form">
+        <div id="fullname-row" class="hidden">
+          <label>Անուն Ազգանուն</label>
+          <input id="full_name" type="text" placeholder="Անուն Ազգանուն" />
+        </div>
+        <label>Օգտանուն</label>
+        <input id="username" type="text" autocomplete="username" required />
+        <label>Գաղտնաբառ</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button type="submit" id="auth-submit" class="btn-primary">Մուտք</button>
+        <p id="auth-error" class="error"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====== Հիմնական էկրան ====== -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand">📅 Դասերի կալենդար</div>
+      <div class="user-box">
+        <span id="who"></span>
+        <button id="logout" class="btn-ghost">Ելք</button>
+      </div>
+    </header>
+
+    <!-- Ադմինի վահանակ -->
+    <section id="admin-panel" class="hidden card">
+      <h2>Նոր դաս նշանակել</h2>
+      <form id="lesson-form" class="lesson-form">
+        <input type="hidden" id="lesson-id" />
+        <div class="grid">
+          <div>
+            <label>Աշակերտ</label>
+            <select id="f-student" required></select>
+          </div>
+          <div>
+            <label>Անվանում</label>
+            <input id="f-title" type="text" placeholder="Դասի անվանում" required />
+          </div>
+          <div>
+            <label>Թեմա</label>
+            <input id="f-topic" type="text" placeholder="Թեմա" />
+          </div>
+          <div class="full datetime-block">
+            <div class="dt-head">🗓 Օր և ժամ</div>
+            <div class="dt-fields">
+              <div class="dt-field">
+                <label>📅 Օր</label>
+                <input id="f-date" type="date" required />
+              </div>
+              <div class="dt-field">
+                <label>🕒 Սկիզբ</label>
+                <input id="f-start" type="time" required />
+              </div>
+              <div class="dt-field">
+                <label>🕓 Ավարտ</label>
+                <input id="f-end" type="time" />
+              </div>
+            </div>
+          </div>
+          <div class="full">
+            <label>Նշում</label>
+            <input id="f-note" type="text" placeholder="Լրացուցիչ նշում" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary" id="lesson-submit">Ավելացնել</button>
+          <button type="button" class="btn-ghost hidden" id="lesson-cancel">Չեղարկել</button>
+        </div>
+        <p id="lesson-error" class="error"></p>
+      </form>
+
+      <div class="filter-row">
+        <label>Ցույց տալ աշակերտի կալենդարը՝</label>
+        <select id="filter-student">
+          <option value="">— Բոլոր դասերը (ցանկ) —</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Կալենդար -->
+    <section class="card">
+      <div class="cal-head">
+        <button id="prev" class="btn-ghost">‹</button>
+        <h2 id="cal-title"></h2>
+        <button id="next" class="btn-ghost">›</button>
+      </div>
+      <div class="weekdays" id="weekdays"></div>
+      <div id="calendar" class="calendar"></div>
+    </section>
+
+    <!-- Ադմինի դասերի ցանկ (երբ ֆիլտր չկա) -->
+    <section id="admin-list" class="hidden card">
+      <h2>Բոլոր դասերը</h2>
+      <div id="lessons-table"></div>
+    </section>
+  </div>
+
+  <!-- Օրվա դասերի մոդալ -->
+  <div id="day-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="day-modal-title"></h3>
+        <button id="day-modal-close" class="btn-ghost">✕</button>
+      </div>
+      <div id="day-modal-body"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
