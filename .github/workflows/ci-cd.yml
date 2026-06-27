@@ -42,7 +42,7 @@ jobs:
           echo "--- register ---"
           REG=$(curl -fsS -X POST http://localhost:8080/api/register \
             -H 'Content-Type: application/json' \
-            -d '{"username":"ci_user","password":"ci_pass","full_name":"CI"}')
+            -d '{"username":"ci_user","password":"ci_pass8","full_name":"CI"}')
           echo "$REG"
           TOKEN=$(echo "$REG" | sed -E 's/.*"token":"([^"]+)".*/\1/')
           [ -n "$TOKEN" ] || { echo "❌ register failed"; kill $PID; exit 1; }

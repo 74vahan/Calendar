@@ -4,7 +4,7 @@ services:
     container_name: calendar-db
     environment:
       POSTGRES_USER: ${DB_USER:-calendar}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-calendar}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required (set it in .env)}
       POSTGRES_DB: ${DB_NAME:-calendar}
     volumes:
       - calendar-db-data:/var/lib/postgresql/data
@@ -20,9 +20,9 @@ services:
     environment:
       DB_HOST: db
       DB_USER: ${DB_USER:-calendar}
-      DB_PASSWORD: ${DB_PASSWORD:-calendar}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required (set it in .env)}
       DB_NAME: ${DB_NAME:-calendar}
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (set it in .env)}
       PORT: 8080
     volumes:
       - ./db:/app/db:ro

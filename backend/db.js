@@ -10,11 +10,16 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+if (!process.env.DB_PASSWORD) {
+  console.error('FATAL: DB_PASSWORD must be set');
+  process.exit(1);
+}
+
 export const pool = new Pool({
   host: process.env.DB_HOST || 'db',
   port: Number(process.env.DB_PORT) || 5432,
   user: process.env.DB_USER || 'calendar',
-  password: process.env.DB_PASSWORD || 'calendar',
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'calendar',
 });
 

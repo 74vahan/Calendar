@@ -32,6 +32,29 @@ function save() {
 const app = express();
 app.use(express.json());
 
+// ---- rate limiting (նույնը, ինչ prod-ում՝ dev-paritet-ի համար) ----
+function rateLimit({ windowMs, max }) {
+  const hits = new Map();
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, rec] of hits) if (now > rec.resetAt) hits.delete(ip);
+  }, windowMs);
+  sweep.unref?.();
+  return (req, res, next) => {
+    const now = Date.now();
+    const ip = req.ip || 'unknown';
+    let rec = hits.get(ip);
+    if (!rec || now > rec.resetAt) { rec = { count: 0, resetAt: now + windowMs }; hits.set(ip, rec); }
+    rec.count++;
+    if (rec.count > max) {
+      res.set('Retry-After', String(Math.ceil((rec.resetAt - now) / 1000)));
+      return res.status(429).json({ error: 'չափից շատ փորձեր, փորձեք քիչ անց' });
+    }
+    next();
+  };
+}
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+
 // ---- helpers ----
 function sign(u) {
   return jwt.sign({ id: u.id, username: u.username }, JWT_SECRET, { expiresIn: '7d' });
@@ -61,9 +84,10 @@ const lessonOwner = (id) => { const l = lessonById(id); return l ? roomById(l.ro
 const subCount = (roomId) => db.subscriptions.filter((s) => s.room_id === roomId).length;
 
 // ---- auth ----
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   const { username, password, full_name } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'օգտանունը և գաղտնաբառը պարտադիր են' });
+  if (typeof password !== 'string' || password.length < 8) return res.status(400).json({ error: 'գաղտնաբառը պետք է լինի առնվազն 8 նիշ' });
   if (db.users.some((u) => u.username === username)) return res.status(409).json({ error: 'այդ օգտանունը զբաղված է' });
   const user = {
     id: db.seq.users++, username, full_name: full_name || null,
@@ -73,7 +97,7 @@ app.post('/api/register', async (req, res) => {
   res.json({ token: sign(user), username: user.username });
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   const user = db.users.find((u) => u.username === username);
   if (!user || !(await bcrypt.compare(password, user.password_hash)))

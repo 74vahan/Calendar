@@ -5,9 +5,45 @@ import { pool, initDb } from './db.js';
 
 const app = express();
 app.use(express.json());
+// Հավելվածն աշխատում է nginx-ի հետևում → վստահում ենք առաջին proxy-ին, որ req.ip-ը
+// լինի հաճախորդի իրական հասցեն (X-Forwarded-For), այլ ոչ թե nginx-ի կոնտեյների IP-ն։
+app.set('trust proxy', 1);
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET === 'dev-secret-change-me') {
+  console.error('FATAL: JWT_SECRET must be set to a strong random value');
+  process.exit(1);
+}
 const PORT = Number(process.env.PORT) || 8080;
+
+// ---- rate limiting (անկշիռ in-memory, single-instance) ----
+// Պաշտպանություն auth-էնդփոյնթների վրա բրուտ-ֆորսից։ Ֆիքսված պատուհան՝ IP-ով։
+function rateLimit({ windowMs, max }) {
+  const hits = new Map(); // ip -> { count, resetAt }
+  // Պարբերաբար մաքրում ենք հնացած գրառումները, որ Map-ը անսահման չաճի։
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, rec] of hits) if (now > rec.resetAt) hits.delete(ip);
+  }, windowMs);
+  sweep.unref?.();
+  return (req, res, next) => {
+    const now = Date.now();
+    const ip = req.ip || 'unknown';
+    let rec = hits.get(ip);
+    if (!rec || now > rec.resetAt) {
+      rec = { count: 0, resetAt: now + windowMs };
+      hits.set(ip, rec);
+    }
+    rec.count++;
+    if (rec.count > max) {
+      const retry = Math.ceil((rec.resetAt - now) / 1000);
+      res.set('Retry-After', String(retry));
+      return res.status(429).json({ error: 'չափից շատ փորձեր, փորձեք քիչ անց' });
+    }
+    next();
+  };
+}
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 
 // ---- helpers ----
 function sign(user) {
@@ -48,10 +84,12 @@ async function lessonOwner(lessonId) {
 }
 
 // ---- auth routes ----
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   const { username, password, full_name } = req.body || {};
   if (!username || !password)
     return res.status(400).json({ error: 'օգտանունը և գաղտնաբառը պարտադիր են' });
+  if (typeof password !== 'string' || password.length < 8)
+    return res.status(400).json({ error: 'գաղտնաբառը պետք է լինի առնվազն 8 նիշ' });
   try {
     const hash = await bcrypt.hash(password, 10);
     const r = await pool.query(
@@ -69,7 +107,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password)
     return res.status(400).json({ error: 'օգտանունը և գաղտնաբառը պարտադիր են' });

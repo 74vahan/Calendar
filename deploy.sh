@@ -23,9 +23,9 @@ TAR="$(mktemp -t calendar.XXXX.tar.gz)"
 tar --exclude='node_modules' --exclude='.git' --exclude='*.pem' --exclude='.env' \
     -czf "$TAR" -C "$HERE" .
 
-scp -i "$KEY" -o StrictHostKeyChecking=no "$TAR" "$SSH_USER@$IP:/home/$SSH_USER/calendar.tar.gz"
+scp -i "$KEY" -o StrictHostKeyChecking=accept-new "$TAR" "$SSH_USER@$IP:/home/$SSH_USER/calendar.tar.gz"
 
-ssh -i "$KEY" -o StrictHostKeyChecking=no "$SSH_USER@$IP" bash -s <<'EOF'
+ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "$SSH_USER@$IP" bash -s <<'EOF'
 set -e
 command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com | sudo sh; sudo usermod -aG docker "$USER"; }
 [ -f ~/calendar/.env ] && cp ~/calendar/.env ~/.calendar.env.bak || true
